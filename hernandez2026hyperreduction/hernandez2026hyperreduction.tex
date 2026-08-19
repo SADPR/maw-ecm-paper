@@ -394,8 +394,8 @@ modified.   At each tentative elimination, redistributing the remaining weights 
 to a convex quadratic program with linear equality and positivity
 constraints. A key ingredient of the proposed procedure is an algorithm
 that exploits the local structure of the state-wise constraints and
-activates the graph regularization---the most computationally demanding
-component of the method---only when required to preserve positivity.
+activates the graph regularization, the most computationally demanding
+component of the method, only when required to preserve positivity.
 
 %
 %  We therefore devise a tailored algorithm that takes advantage of the
@@ -461,7 +461,7 @@ leading POD coefficients, and Ref.~\cite{koike2026sparse} selects an
 informative subset not necessarily following the singular-value
 ordering, here the latent coordinates are allowed to be arbitrary
 linear combinations of the retained modal coefficients.
-Our proposal is that the identification of these linear combinations should should also exploit
+Our proposal is that the identification of these linear combinations should also exploit
 the associated problem inputs, as well as, when relevant,  their relative arrangement,
 encoded through a graph over the training states. More specifically, in the
 hyperelastic problem of Section~\ref{sec:metamaterial}, the input parameters
@@ -557,7 +557,7 @@ manifold-learning procedures. Finally, given the exploratory character of this s
 assessment is deliberately restricted to low-dimensional parameter and
 latent spaces, for which the adaptive weight fields  can be directly visualized and interpreted.
 Scalability to substantially higher-dimensional spaces, particularly
-regarding the construction a  of the latent graph used for regularization, lies
+regarding the construction of the latent graph used for regularization, lies
 outside the scope of the present work.
 
 
