@@ -252,7 +252,7 @@ for standard HROMs; in particular, the manifold HROM formulations in
 Refs.~\cite{jain2019hyper,barnett2023neural,chmiel2025unified,
 ares2026nonlinear} all rely on ECSW. Neither specific algorithms nor
 refinements of existing ones have been devised to exploit the new
-nonlinear-manifold framework. ECSW---and, in essence, the same applies to ECM and EQP---may be
+nonlinear-manifold framework. ECSW (and, in essence, the same applies to ECM and EQP) may be
 viewed as seeking a sparse vector of nonnegative weights whose local
 contributions reproduce, within a prescribed accuracy, those of the
 high-dimensional model over the training set. These contributions are
@@ -275,19 +275,19 @@ sampling-and-weighting construction that we challenge in the present paper.
  Our central claim is that this standard approach does not fully exploit the
 nonlinear-manifold structure underlying the reduced model.
  If the state is parameterized on a curved manifold, and
-quantities entering the reduced equations---such as the test functions
-in a Galerkin projection---change as the solution moves over that
+quantities entering the reduced equations, such as the test functions
+in a Galerkin projection, change as the solution moves over that
 manifold, then the positive weights used for hyperreduction should
 change as well, rather than remain fixed over all latent states. The
 expected consequence of this adaptiveness is a further reduction in
-the number of spatial entities---elements, control volumes, or
-integration points---that must be retained to reproduce the
+the number of spatial entities, such as elements, control volumes, or
+integration points, that must be retained to reproduce the
 full-order contributions entering the reduced equations.
 
 
  The mechanism by which adaptive weights can reduce the number of
 required spatial entities can be readily illustrated by a simple
-quadrature problem---sampling-and-weighting hyperreduction can be
+quadrature problem: sampling-and-weighting hyperreduction can be
 interpreted, in essence, as a quadrature/cubature problem, as made
 explicit by the ECM and EQP
 \cite{hernandez2017dimensional,yano2019lp}, as well as by the pioneering
@@ -301,7 +301,7 @@ to integrate every latent state exactly,  $I(q) = \sum_{g=1}^{m} f_q(x_g)\,\omeg
 then it must also integrate
 their complete linear span, namely, the polynomial space
 of degree at most \(P\). Even the optimal Gauss--Legendre rule therefore
-requires \(m\geq (P+1)/2 \) sampling points ---the
+requires \(m\geq (P+1)/2 \) sampling points: the
 required number of integration points grows linearly with the number
 of latent states. By contrast, if one retains a single sampling point,
 say \(x_1=1\), and allows its weight to depend on the latent coordinate,
