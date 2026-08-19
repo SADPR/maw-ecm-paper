@@ -2238,7 +2238,7 @@ Current active support \(\Iact\); candidate point \(p\in\Iact\);
 current weights \(\Wold\); local equality systems restricted to the
 current active support,
 \(\{(\Uactj{j},\bj{j})\}_{j=1}^{\nM}\),
-graph operator \(\KGs\); regularization parameter \(\alphaG>0\).
+graph operator \(\KGs\); regularization parameter \(\alphaG\ge0\).
 }
 
 \KwResult{Acceptance flag \(\SUCCESS\), remaining support \(\Irem\),
@@ -2766,7 +2766,7 @@ local equality systems restricted to the current active support,
 \(\{(\Uactj{j},\bj{j})\}_{j=1}^{\nM}\) (where
 \(\Uactj{j} =  (\Uj{j})_{\Iact}\in\mathbb{R}^{|\Iact|\times\ncondQ{j}}\) and
 \(\bj{j}\in\mathbb{R}^{\ncondQ{j}}\));
-graph operator \(\KGs\); regularization parameter \(\alphaG>0\);
+graph operator \(\KGs\); regularization parameter \(\alphaG\ge0\);
 maximum number of feasible pruning trials \(\ntry\).
 }
 
@@ -2889,7 +2889,7 @@ local equality systems
 \(\Uj{j}\in\mathbb{R}^{\mInit\times\ncondQ{j}}\) defined on \(\ZD\)
 and \(\bj{j}\in\mathbb{R}^{\ncondQ{j}}\);
 graph operator \(\KGs\in\mathbb{R}^{\nM\times\nM}\);
-regularization parameter \(\alphaG>0\);
+regularization parameter \(\alphaG\ge0\);
 maximum number of feasible pruning trials \(\ntry\).
 }
 
@@ -2901,8 +2901,8 @@ contains samples over the latent space of the adaptive weight field
 associated with the \(i\)-th retained Gauss point).
 }
 
-\(\Iact\leftarrow\{1,\ldots,\mInit\}\), \(\Ielim\leftarrow\emptyset\)
-\tcp{Active/eliminated local indices with respect to the fixed support \(\ZD\) \label{alg3:ini1}}
+\(\Iact\leftarrow\{1,\ldots,\mInit\}\)
+\tcp{Active local indices with respect to the fixed support \(\ZD\) \label{alg3:ini1}}
 
 \(\Wold\leftarrow[\omegaInit,\ldots,\omegaInit]\in\mathbb{R}^{\mInit\times\nM}\)
 \tcp{Initial adaptive weights, still represented on the full support \(\ZD\)  \label{alg3:ini2}}
@@ -2931,7 +2931,7 @@ associated with the \(i\)-th retained Gauss point).
 }
 }
 
-\(\Zomega\leftarrow\ZD(\Iact)\)\;
+\(\Zomega\leftarrow\{z_i\}_{i\in\Iact}\)\;
 \(\Wadc\leftarrow\Wold\)\;
 
 \caption{\textsc{MAWPrune}: global feasible pruning of the initial
@@ -2946,7 +2946,7 @@ Finally, Algorithm~\ref{alg:MAW_global_pruning} describes how the initial
 fixed ECM rule introduced in
 Section~\ref{sec:MAW_local_constraints} (see, in particular,
 Eq.~\eqref{eq:initialW}) is progressively transformed into a more compact
- adaptive cubature   through repeated calls
+ adaptive cubature rule through repeated calls
 (Line~\ref{alg3:alg2}) to the candidate-sweep procedure described above. The process terminates when no further feasible
 pruning step can be found (Line~\ref{alg3:finish}). The resulting matrix
 \(
@@ -2984,25 +2984,25 @@ The matrix \(\Wad\) is not itself the final outcome of the procedure; it
 only provides the sampled data required for constructing the continuous
 manifold-adaptive weight fields entering
 Eq.~\eqref{eq:approxGEN2}. More specifically, for each retained Gauss
-point \(g \in \{1,2, \ldots |\Zomega|\}\), one seeks to construct a nonlinear map
+point \(g_i\in\Zomega\), \(i=1,\ldots,\nomega\), one seeks to construct a nonlinear map
 \begin{equation}
 \label{eq:3dssdddd}
     \qM
     \mapsto
-    \omegag{g}(\qM),
+    \omegag{g_i}(\qM),
 \end{equation}
 from the pairs
 \begin{equation}
 \label{eq:pairs}
   \left\{
-    \big(\qMj{j},(\Wad)_{g,j}\big)
+    \big(\qMj{j},(\Wad)_{i,j}\big)
     \right\}_{j=1}^{\nM}
 \end{equation}.
 
 
 
 Generic regression procedures for Eq.~\ref{eq:3dssdddd} do not guarantee
-preservation of the structural properties inherited from the cubature rule (i.e.,   positivity), particularly   outside the convex hull of the training data. Possible strategies for
+positivity or exact preservation of the total volume, particularly outside the convex hull of the training data. Possible strategies for
 mitigating this issue include, on the one hand, enriching the regression
 dataset with additional low-fidelity samples outside the FE training
 region\footnote{The additional samples could be generated
@@ -3010,7 +3010,7 @@ region\footnote{The additional samples could be generated
 same multi-fidelity philosophy could be applied to the decoder by augmenting its training
 set with additional low-fidelity snapshots generated, for instance, from a
 standard fixed-weight HROM.}, or, on the other hand,
-employing regression procedures explicitly designed to preserve positivity
+employing regression procedures explicitly designed to preserve positivity, volume,
 or related geometric constraints~\cite{pennec2006riemannian}.  The study of such
 constraint-preserving regression procedures lies beyond the scope of the
 present work; in the numerical examples discussed in the sequel, we simply
