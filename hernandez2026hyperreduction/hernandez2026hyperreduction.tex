@@ -2284,9 +2284,9 @@ redistributed weights \(\Wnew\), and redistribution energy \(\Sdir \).}
 \tcp{Numerical rank associated with   nonzero singular values
 \label{alg1:svdRANK}}
 
-       \If{\(\rj<\ncond\)}{
+       \If{\(\rj<\ncondQ{j}\)}{
     \(\SUCCESS\leftarrow\FALSE\)
-    \tcp{Local exactness constraints cannot be satisfied  \label{alg1:nosuccess}}
+    \tcp{Full-row-rank acceptance condition fails  \label{alg1:nosuccess}}
 
          Reject candidate and set
 \(\Irem\leftarrow\Iact,\ \Wnew\leftarrow\Wold\); $\;\;\;$ \textbf{stop}
@@ -2316,7 +2316,8 @@ Compute null-space basis \(\Nj{j}\)
     \(\SUCCESS\leftarrow\TRUE\)
     \tcp{Successful pruning step, no need for regularization  \label{alg1:success3}}
 
-    \(\Irem\leftarrow\Iact\setminus\{p\}\), assemble \(\Wnew\) from the local vectors \(\wpfull{j}\); $\;\;$ \textbf{stop}}
+    \(\Irem\leftarrow\Iact\setminus\{p\}\), assemble \(\Wnew\) from the local vectors \(\wpfull{j}\); $\;\;$
+    restrict \(\Wnew\) to rows \(\{1,\ldots,|\Iact|\}\setminus\{\ploc\}\); $\;\;$ \textbf{stop}}
 
 
 {
@@ -2384,12 +2385,12 @@ Assemble global variables \(\zpart\) and \(\Nmat\)
 
         $\SUCCESS\leftarrow\TRUE$
         \tcp{Successful positivity-enforced redistribution  \label{alg1:sss3333}}
-    \(\Irem\leftarrow\Iact\setminus\{p\}\); $\;$  restrict \(\Wnew\) to   rows
-\(\{1,\ldots,|\Iact|\}\setminus\{\ploc\}\); $\;\;$
-
 \(\Sdir\leftarrow
 \operatorname{tr}\!\left((\Wnew-\Woldrem)\KG(\Wnew-\Woldrem)^T\right)\)
 \tcp{Graph Dirichlet energy \label{alg1:energy}}
+
+    \(\Irem\leftarrow\Iact\setminus\{p\}\); $\;$  restrict \(\Wnew\) to   rows
+\(\{1,\ldots,|\Iact|\}\setminus\{\ploc\}\); $\;\;$
 
 \textbf{stop}
 
@@ -2493,14 +2494,14 @@ is the following  SVD:
 \qquad
 \Sigmaj{j}
 =
-º\diag(\sigma_1^{j},\ldots,\sigma_{\rj}^{j},0,\ldots,0) \in
-\mathbb{R}^{\ncond\times|\Fj{j}|}.
+\diag(\sigma_1^{j},\ldots,\sigma_{\rj}^{j},0,\ldots,0) \in
+\mathbb{R}^{\ncondQ{j}\times|\Fj{j}|}.
 \end{equation}
 where
 \(
 {\Uactj{j}}_{\Fj{j}}
 \in
-\mathbb{R}^{|\Fj{j}|\times\ncond}
+\mathbb{R}^{|\Fj{j}|\times\ncondQ{j}}
 \)
 denotes the local equality system restricted to the current free rows
 \(\Fj{j}\subseteq\{1,\ldots,|\Iact|\}\), defined in Line~\ref{alg1:prune_free} as the complementary set of the active rows $\Dj{j}$. Initially, \(\Dj{j}\) contains only the
@@ -2515,20 +2516,20 @@ used to determine the numerical rank of the restricted local system
 singular values in \(\Sigmaj{j}\), Line~\ref{alg1:svdRANK}), construct a particular feasible
 redistribution (Line~\ref{alg1:prune_particular}), and identify a basis
 for the associated null space
-(Line~\ref{alg1:prune_null}).  The rank condition is what ultimately determines whether a tentative
-candidate point can be feasibly removed or not. A single violation of this condition at any sampled latent state
-(Line~\ref{alg1:nosuccess}) immediately implies rejection of the
+(Line~\ref{alg1:prune_null}).  The full-row-rank condition is what ultimately determines whether a tentative
+candidate point can be accepted by the algorithm. A single violation of this condition at any sampled latent state
+(Line~\ref{alg1:nosuccess}) immediately causes rejection of the
 candidate and termination of the pruning step without modifying the
 current integration rule. It should be noted that such a violation may
 occur for two different reasons: either the restricted local system is
 numerically rank deficient, or the active-set updates have clamped so
 many weights that the number of remaining free design variables  $|\Fj{j}|$  becomes
 smaller than the number of local equality constraints \(\ncondQ{j}\) ($j=1,2 \ldots \nM$).  Numerical experience indicates that the latter is the most frequent cause of rejection.  This observation also identifies the natural stopping limit of
-the pruning process:  pruning cannot proceed below the maximum number of independent local
-constraints, which, according to \refeq{eq:nconstrainsBOUND},  is given by
+the pruning process:  the common support cannot contain fewer points than the maximum number of independent local
+constraints,
 \begin{equation}
 \label{eq:ncondmin}
-\mLower =  \ncond + \ninv.
+\mLower \defeq \max_{j=1,\ldots,\nM}\ncondQ{j} \le \ncond + \ninv.
 \end{equation}
 
 
@@ -2636,7 +2637,7 @@ with all sampled latent states, whereas $\znew=\operatorname{vec}(\Wnew)$.
 
  Using standard
 vectorization identities for Frobenius norms and trace operators, the
-matrix-valued objective function in Problem  ~\ref{alg:prune_step_optionB} can then be expressed as an equivalent quadratic
+matrix-valued objective function in Problem~\eqref{eq:quadraticGENERAL} can then be expressed as an equivalent quadratic
 functional in terms of \(\znew\). After expanding the resulting
 expression and discarding terms independent of the optimization
 variables, we obtain the reduced quadratic form
@@ -2763,8 +2764,8 @@ attempting to become negative and therefore being clamped to zero (in Line~\ref{
 Current active support \(\Iact\); current weights \(\Wold\);
 local equality systems restricted to the current active support,
 \(\{(\Uactj{j},\bj{j})\}_{j=1}^{\nM}\) (where
-\(\Uactj{j} =  (\Uj{j})_{\Iact}\in\mathbb{R}^{|\Iact|\times\ncond}\) and
-\(\bj{j}\in\mathbb{R}^{\ncond}\));
+\(\Uactj{j} =  (\Uj{j})_{\Iact}\in\mathbb{R}^{|\Iact|\times\ncondQ{j}}\) and
+\(\bj{j}\in\mathbb{R}^{\ncondQ{j}}\));
 graph operator \(\KGs\); regularization parameter \(\alphaG>0\);
 maximum number of feasible pruning trials \(\ntry\).
 }
@@ -2885,8 +2886,8 @@ initial fixed ECM weights
 \(\omegaInit\in\mathbb{R}^{\mInit}\), defined on \(\ZD\);
 local equality systems
 \(\{(\Uj{j},\bj{j})\}_{j=1}^{\nM}\), with
-\(\Uj{j}\in\mathbb{R}^{\mInit\times\ncond}\) defined on \(\ZD\)
-and \(\bj{j}\in\mathbb{R}^{\ncond}\);
+\(\Uj{j}\in\mathbb{R}^{\mInit\times\ncondQ{j}}\) defined on \(\ZD\)
+and \(\bj{j}\in\mathbb{R}^{\ncondQ{j}}\);
 graph operator \(\KGs\in\mathbb{R}^{\nM\times\nM}\);
 regularization parameter \(\alphaG>0\);
 maximum number of feasible pruning trials \(\ntry\).
@@ -2910,7 +2911,7 @@ associated with the \(i\)-th retained Gauss point).
 
 \While{\(\SUCCESS=\TRUE\)}{
 
-\(\Uactj{j}\leftarrow(\Uj{j})_{\Iact}\in\mathbb{R}^{|\Iact|\times\ncond}\),
+\(\Uactj{j}\leftarrow(\Uj{j})_{\Iact}\in\mathbb{R}^{|\Iact|\times\ncondQ{j}}\),
 \(j=1,\ldots,\nM\)
 \tcp{Restrict local systems to the current active support \label{alg3:U}}
 
