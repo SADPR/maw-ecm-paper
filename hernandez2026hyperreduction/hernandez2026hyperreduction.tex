@@ -49,14 +49,15 @@
 \begin{frontmatter}
 
 
-\title{Hyperreduction of Nonlinear Manifold Reduced-Order Models via Adaptive-Weight Empirical Cubature}
+%\title{Hyperreduction of Nonlinear Manifold Reduced-Order Models via Adaptive-Weight Empirical Cubature}
 
-
+\title{Dimensional hyperreduction of nonlinear finite element models via
+empirical cubature with manifold-adaptive weights}
 
  \author[rvt,els]{Joaqu\'{i}n A. Hern\'{a}ndez\corref{cor1}}
 \ead{jhortega@cimne.upc.edu}
 
-\author[rvt,stan]{S. Ares de Parga}
+\author[rvt,stan]{Sebastian Ares de Parga}
 
 \author[rvt,elss]{Riccardo Rossi}
 
@@ -75,38 +76,35 @@
 
 
 \begin{abstract}
-Nonlinear-manifold reduced-order models can achieve a strong compression
-of the kinematic state, but their computational efficiency still depends
-on reducing the cost of evaluating nonlinear internal forces and outputs.
-This second reduction is usually achieved through hyperreduction, namely
-by replacing the full finite element quadrature by a much smaller set of
-elements or integration points equipped with suitable weights---or,
-equivalently, through mesh/point selection and weighting.
+Nonlinear-manifold reduced-order models for parametrized finite
+element problems can achieve substantial compression both in the number
+of generalized (latent) coordinates and, through sampling-and-weighting
+hyperreduction, in the number of sampled elements/integration points.
+Yet current sampling-and-weighting approaches employ weights that remain
+fixed over the entire solution manifold. We contend that this restriction
+leaves part of the hyperreduction potential untapped: allowing the weights
+to vary continuously and nonlinearly with the latent coordinates can
+further decrease the number of spatial entities that must be sampled.  To exploit this possibility, we propose the Manifold-Adaptive-Weight
+Empirical Cubature Method (MAW--ECM). Starting from a feasible fixed-weight ECM
+rule, a greedy pruning strategy progressively removes sampled entities
+through a sequence of convex quadratic weight-redistribution problems
+that enforce the local   conditions and positivity.
+The methodology is assessed on two nonlinear benchmarks:
+a hyperelastic metamaterial and a history-dependent continuum-damage
+problem. In both cases, the nonlinear manifold is constructed from an
+initial linear compression followed by an input-informed identification of
+the latent coordinates as general linear combinations of the retained
+modal amplitudes, incorporating graph information when relevant to seek
+the intrinsic dimensionality of the solution manifold. We show that  combining the nonlinear-manifold representation with MAW--ECM reduces
+the number of sampled integration points by more than two orders of
+magnitude relative to the corresponding standard linear reduced model.
+ Relative to the fixed-weight manifold models alone, the adaptive weights
+eliminate approximately \(80\%\) of the remaining  points in
+the hyperelastic benchmark and more than \(97\%\) in the damage
+benchmark, while essentially preserving their accuracy.
 
-In conventional hyperreduction, the selected elements or integration
-points and their associated weights remain fixed throughout the reduced
-simulation. This work investigates an alternative in which the
-integration points are kept fixed while their positive weights are
-allowed to vary with the latent coordinates of the nonlinear solution
-manifold. The resulting Manifold-Adaptive-Weight Empirical Cubature
-Method (MAW--ECM) imposes the integration conditions locally along the
-sampled manifold and promotes smooth variations of the weight fields by
-means of graph-based regularization. A greedy pruning strategy is used
-to progressively remove integration points while preserving accuracy
-and positivity.
 
-The approach is assessed on two nonlinear structural problems: a
-hyperelastic metamaterial and a history-dependent continuum-damage
-problem. Relative to the corresponding fixed-weight manifold models,
-the adaptive rules eliminate approximately \(80\%\) and more than
-\(97\%\) of the remaining integration points, respectively, with
-negligible loss of accuracy. The larger gain observed in the damage
-problem suggests that state-dependent weights are particularly effective
-when the nonlinear response involves the propagation of localized
-features. Overall, the results indicate that allowing the integration
-weights to adapt to the low-dimensional solution manifold can provide
-an additional and substantial level of hyperreduction beyond that
-obtained with fixed-weight quadrature.
+
 \end{abstract}
 % This document describes the construction of a manifold-based hyperreduced-order model
 % with adaptive integration weights, based on the Empirical Cubature Method, and applied
@@ -145,365 +143,488 @@ Nonlinear manifold reduced-order models; Hyperreduction; Empirical Cubature Meth
 
 
 \section{Introduction}
-\PROMPT{\input{Prompt_Introduction01}}
+
 %\input{Intro_1}
 %\input{Intro_2}
 %\input{Intro_3}
 %\input{Intro_4}
+%\input{Intro_5ChatGPT} % Good one
+%\input{Intro_6Claude}
 
-\subsection{Motivation}
+%\input{Intro_7Claude}
+%\input{Intro_6ChatGPT}
+%\input{Intro8_claude}  % Also good one
+%\input{Intro9_claude}
+% \PROMPT{\input{Prompt_Introduction01}}
+% %\input{Intro10ChatGPT}
+% \PROMPT{\input{Prompt_Introduction02}}
+% \PROMPT{\input{Prompt_Introduction03}}
+% \PROMPT{\input{Prompt_Introduction04}}
+% \PROMPT{\input{Prompt_Introduction05}}
+% \PROMPT{\input{Prompt_Introduction06}}
+% \PROMPT{\input{Prompt_Introduction07}}
+% \PROMPT{\input{Prompt_Introduction08}}
+% \PROMPT{\input{Prompt_Introduction09}}
+% \PROMPT{\input{Prompt_Introduction10}}
+% \PROMPT{\input{Prompt_Introduction11}}
+% \PROMPT{\input{Prompt_Introduction12}}
+% \PROMPT{\input{Prompt_Introduction13}}
 
-Projection-based reduced-order models for nonlinear finite element
-problems involve, in essence, two distinct levels of dimensional
-reduction. The first concerns the number of kinematic variables used to
-represent the solution; the second concerns the number of spatial
-locations---elements or integration points---that must be visited to
-evaluate the nonlinear terms entering the reduced equations
-\cite{farhat2014dimensional,hernandez2017dimensional,ares2023hyper}.
-The latter reduction, commonly referred to as hyperreduction, is
-indispensable if the online computational cost is to become independent,
-or nearly independent, of the size of the underlying finite element
-model.
+\subsection{Manifold HROMs using standard sampling-and-weighting hyperreduction}
 
-Concerning the first level of reduction, the classical approach
-consists in approximating the solution in a low-dimensional linear
-space, generally obtained from solution snapshots by means of the
-proper orthogonal decomposition or, equivalently in the discrete
-setting, the singular value decomposition. In recent years, increasing
-attention has been devoted to replacing this linear representation by
-a nonlinear manifold
-\cite{lee2019model,fresca2021comprehensive,fresca2022pod,
-barnett2022quadratic,barnett2023neural,ares2026nonlinear}.
-The rationale is that a solution set may possess a small intrinsic
-dimension and nevertheless require a comparatively large number of
-linear modes for its accurate representation. Nonlinear mappings then
-provide a means of separating these two notions of dimension.
-
-This idea has a particularly natural interpretation in structural
-mechanics. The displacement vector is written as a nonlinear function
-of a small number of generalized, or latent, coordinates, and the
-principle of virtual work is restricted to the tangent space of the
-resulting manifold. Consequently, both the trial representation and
-the associated test space depend on the current reduced state
-\cite{jain2019hyper,barnett2022quadratic,
-barnett2023neural,ares2026nonlinear}. The increasingly effective
-regression and machine-learning techniques available for constructing
-such nonlinear mappings have made this alternative to linear reduction
-practically viable
-\cite{lee2019model,fresca2022pod,ares2026nonlinear}.
-
-A natural question then arises: can the increased kinematic compression
-provided by a nonlinear manifold be accompanied by a commensurate
-reduction at the hyperreduction level? This question is the starting
-point of the present work.
-
-
-\subsection{Hyperreduction over nonlinear manifolds}
-
-For nonlinear finite element models, hyperreduction may be regarded as
-a problem of approximating spatial integrals by retaining only a small
-subset of the contributions of the original discretization. Among the
-methods following this philosophy are the cubature procedure of
-An et al.~\cite{an2009optimizing}, the Energy-Conserving Sampling and
-Weighting method (ECSW) of Farhat and co-workers
-\cite{farhat2014dimensional}, and the Empirical Cubature Method (ECM)
-\cite{hernandez2017dimensional,hernandez2020multiscale}.
-These procedures differ in their particular point-selection and
-weighting strategies, but share the use of a reduced spatial support
-equipped with positive weights. In particular, an element-based
-procedure of the ECSW type can be interpreted within the same cubature
-framework by grouping the Gauss-point contributions elementwise
-\cite{ares2023hyper,bravo2024geometrically}.
-
-The extension of this idea to nonlinear-manifold ROMs has already
-been considered by Jain and Tiso~\cite{jain2019hyper}, who
-generalized ECSW to nonlinear mappings and showed how the element
-contributions must be projected onto the state-dependent tangent space.
-More recent nonlinear projection-based formulations have likewise
-combined manifold representations with ECSW-type hyperreduction
-\cite{ares2026nonlinear}. Thus, there is no incompatibility between
-nonlinear-manifold projection and the classical sampling-and-weighting
-paradigm.
-
-There is, however, an aspect of this construction that deserves closer
-examination. In a nonlinear-manifold ROM, the displacement
-representation changes with the latent coordinates and, more
-importantly from the present standpoint, so does the tangent space onto
-which the governing equations are projected. By contrast, the
-associated hyperreduction rule is normally constructed with a single
-set of weights that remains fixed throughout the reduced simulation
-\cite{jain2019hyper,ares2026nonlinear}. In the ECM setting,
-for instance, snapshots of the projected integrands over the complete
-training set are collected, their global linear span is compressed by
-SVD, and one fixed positive cubature rule is required to reproduce the
-resulting basis functions
-\cite{hernandez2017dimensional,hernandez2020multiscale,
-hernandez2024cecm}.
-
-Such a construction is entirely consistent, but it does not exploit
-all the information available in a nonlinear-manifold ROM. The
-projected integrands corresponding to different latent states are not
-arbitrary members of their global linear span: they are generated by
-states lying on a low-dimensional manifold, and the test basis itself
-varies along that manifold. Requiring one and the same weight vector to
-accommodate all these states amounts therefore to retaining the
-classical fixed-rule paradigm after the kinematic description has
-already abandoned its linear counterpart.
-
-A simple one-dimensional quadrature problem helps illustrate this
-point. Consider the parameterized family
-\begin{equation}
-    f_p(x)=x^p,
-    \qquad
-    x\in[0,1],
-    \qquad
-    p=0,1,\ldots,P ,
-\end{equation}
-whose exact integrals are
-\begin{equation}
-    I(p)
-    \defeq
-    \int_0^1 f_p(x)\,dx
-    =
-    \int_0^1 x^p\,dx
-    =
-    \frac{1}{p+1}.
-\end{equation}
-Suppose first that both the integration point and its weight must be
-common to the complete family. More generally, if a fixed rule with
-\(m\) points is required to integrate every member exactly,
-\begin{equation}
-    I(p)
-    =
-    \sum_{i=1}^{m}
-    w_i x_i^p,
-    \qquad
-    p=0,1,\ldots,P,
-\end{equation}
-then the rule must be exact for the complete polynomial space of degree
-at most \(P\). Recall that the \(m\)-point Gauss--Legendre rule, which
-attains the maximum polynomial degree of exactness for \(m\) integration
-points, integrates exactly polynomials up to degree \(2m-1\); hence,
-exactness over the preceding family requires
-\begin{equation}
-    m
-    \geq
-    \left\lceil \frac{P+1}{2}\right\rceil .
-\end{equation}
-This is the familiar setting in which increasing the dimension of the
-function space entails an increasing number of integration points
-\cite{xiao2010numerical,hernandez2024cecm}.
-
-Consider now the same problem while retaining a common integration
-point but allowing its weight to depend on \(p\). Taking simply
-\(x_1=1\), one obtains
-\begin{equation}
-    I(p)
-    =
-    \omega(p) f_p(1),
-    \qquad
-    \omega(p)=\frac{1}{p+1},
-\end{equation}
-and a single integration point suffices for every value of \(p\),
-irrespective of \(P\). The price paid for this spatial compression is
-that the integration weight must now be regarded as a function of the
-parameter defining the integrand. The example is elementary, but it
-isolates the mechanism of interest here: if the admissible integrands
-belong to a parameterized low-dimensional family, imposing a common
-weight vector may require a substantially larger spatial support than
-allowing the weights to vary with the parameter.
-
-State-dependent integration weights are not, in themselves, foreign
-to numerical integration. A familiar analogue arises under
-parameter-dependent changes of variables, where the transformed
-integration measure inherits the parameter dependence of the Jacobian
-of the mapping; related considerations arise, for instance, in
-geometrically parameterized finite element models
-\cite{bravo2024geometrically}. The proposal investigated here has a
-similar flavor, although its origin is different: the spatial
-locations are kept fixed, while the weights are regarded as functions
-of the coordinates used to parameterize the solution manifold. In
-geometrical terms, the weights are allowed to conform to the manifold
-rather than remaining fixed while the reduced state moves over it.
-
-
-\subsection{Originality and scope of the present work}
-
-The principal contribution of this paper is the
-\emph{Manifold-Adaptive-Weight Empirical Cubature Method}
-(MAW--ECM). The basic premise is simple: a common subset of the
-finite element Gauss points is retained, but the positive weights
-associated with these points are allowed to depend on the latent
-coordinates,
-\begin{equation}
-    \omegag{g}=\omegag{g}(\qM).
-\end{equation}
-Accordingly, the support of the reduced integration rule remains fixed
-in the reference configuration, while its weights evolve with the
-state on the nonlinear solution manifold.
-
-The closest antecedent to this idea is the subspace-adaptive weights
-cubature method introduced in Ref.~\cite{bravo2024subspace}. There,
-the purpose is to integrate functions that may belong to several
-precomputed linear subspaces. A common set of integration points is
-used for all such subspaces, but each subspace is endowed with its own
-weight vector. The numerical results reported in
-Ref.~\cite{bravo2024subspace} show, in particular, that increasing the
-number of local subspaces can substantially decrease the number of
-integration points required in their common support. The present work
-may be viewed as the nonlinear-manifold continuation of that idea: the
-finite collection of linear subspaces is replaced by the continuously
-varying states of a solution manifold.
-
-This passage from a discrete family of subspaces to a continuous
-manifold introduces an additional requirement. The weight vectors
-computed at neighboring sampled states cannot be treated as unrelated
-quantities if they are subsequently to be represented as functions of
-the latent coordinates. Rather, they should vary sufficiently smoothly
-over the manifold. To promote this property, the sampled latent states
-are regarded as the nodes of a graph and the associated graph
-Laplacian is used to penalize irregular variations of the weight
-fields, following standard constructions in graph-based approximation
-and manifold learning~\cite{belkin2003laplacian}. The resulting
-MAW--ECM problem therefore combines three ingredients: sparsity of the
-common integration support, local integration constraints at the
-sampled latent states, and regularity of the adaptive weight fields.
-Positive weights are imposed throughout, consistently with the ECM
-and ECSW frameworks
-\cite{farhat2014dimensional,hernandez2017dimensional}.
-
-The sparsification problem admits a natural formulation in terms of
-the \(\ell_0\) pseudo-norm of the rows of the sampled weight matrix.
-The resulting optimization problem is combinatorial and belongs to the
-class of NP-hard sparse-approximation problems
-\cite{natarajan1995sparse}. A possible alternative consists in
-replacing the \(\ell_0\) objective by an \(\ell_1\) surrogate, thereby
-obtaining a convex problem; this is the route followed, for instance,
-by empirical-quadrature formulations based on linear programming
-\cite{yano2019discontinuous,yano2019lp}. Such an approach was
-examined by the authors in the subspace-adaptive setting of
-Ref.~\cite{bravo2024subspace}. Besides becoming increasingly expensive
-as the number of sampled states grows, it requires all the adaptive
-weights to be treated simultaneously as a single global optimization
-variable and thus fails to exploit the fundamentally local character
-of the integration constraints. Moreover, the numerical experiments
-reported in Ref.~\cite{bravo2024subspace} yielded systematically
-larger supports than the corresponding greedy strategy.
-
-Accordingly, the present work follows a greedy pruning strategy.
-Starting from a feasible fixed-weight ECM rule, integration points are
-successively removed and the remaining weights redistributed while
-preserving the required local conditions. This strategy follows the
-same general philosophy employed in the construction of generalized
-quadrature rules
-\cite{bremer2010nonlinear,xiao2010numerical} and subsequently in the
-continuous ECM~\cite{hernandez2024cecm}. An important practical
-feature of the proposed procedure is that graph regularization need
-not be invoked at every pruning step: as long as the local constraints
-can be satisfied with positive weights, the redistribution is
-performed independently at each sampled state. The graph-coupled
-regularized problem is activated only when required to continue the
-pruning process.
-
-To the best of the authors' knowledge, MAW--ECM is the first
-ECM/ECSW-type hyperreduction procedure in which a fixed reduced
-spatial support is endowed with positive integration weights
-represented as smooth functions of the coordinates of a nonlinear
-solution manifold. Its distinction from the nonlinear-manifold ECSW
-of Jain and Tiso~\cite{jain2019hyper} is therefore not in the
-use of tangent-space projection, which is already present in that
-work, but in abandoning the requirement that the integration weights
-remain fixed over the manifold.
-
-Two secondary aspects of the work concern the construction of the
-nonlinear reduced representation. We employ a factorized decoder in
-which a preliminary linear basis is introduced and the latent
-coordinates are sought as linear combinations of its modal
-coefficients. Related master--slave constructions identify the master
-coordinates with the leading POD coefficients
-\cite{barnett2022quadratic,barnett2023neural,ares2026nonlinear}.
-SparseModesNet~\cite{koike2026sparse} recently relaxed this
-singular-value ordering by selecting, for a prescribed latent
-dimension, an informative sparse subset of the individual POD
-coefficients and learning the nonlinear relation between retained and
-discarded coordinates. Here, the Boolean-selection restriction is
-removed altogether: the transformation defining the latent
-coordinates may be dense, so that each latent coordinate may combine
-all the retained modal coefficients. The procedures used to determine
-these combinations exploit the particular structure and
-parametrization of the two problems considered and are therefore not
-proposed as a general manifold-learning methodology.
-
-This point becomes especially relevant in the history-dependent
-benchmark. In this respect, the physically recurrent construction of
-Maia et al.~\cite{maia2023physically} provided useful insight and
-inspiration. In that approach, path dependence is not learned through
-an unconstrained recurrent mapping; rather, constitutive models are
-embedded in the reduced architecture so that their internal variables
-provide the required memory. Here the setting is different, but the
-same principle is retained: the constitutive update at the selected
-integration points is left untouched, while the reduced
-representation is sought for the structural kinematics. This viewpoint
-motivates, in particular, the search for latent coordinates capable of
-separating the reversible dependence on the loading amplitude from the
-irreversible evolution associated with the internal state.
-
-A further technical aspect is the treatment of kinematic constraints.
-The nonlinear decoder is formulated for the independent displacement
-variables, whereas affine and multipoint constraints are subsequently
-introduced through the lifting operator of the finite element problem.
-This permits the same manifold formulation to accommodate, among
-others, periodic boundary conditions of the type encountered in
-computational homogenization and conventional essential constraints.
-
-The scope of the present investigation is deliberately restricted.
-Our purpose is to examine the consequences of replacing fixed
-cubature weights by manifold-dependent ones, rather than the separate
-problem of high-dimensional regression. For this reason, the numerical
-examples involve at most two latent coordinates, and comparatively
-simple regression procedures are employed for both the nonlinear
-decoder and the adaptive weight fields. Likewise, the
-benchmark-specific procedures used to identify the latent coordinates
-are intended to attain a maximally compressed kinematic
-parametrization by exploiting the structure of each problem, rather
-than to provide a universal algorithm for discovering intrinsic
-coordinates. Within these restrictions, the two examples have been
-chosen to expose the adaptive-weight idea under complementary forms
-of nonlinearity: a hyperelastic problem dominated by geometric effects
-and a history-dependent problem governed by continuum damage.
+Recent years have witnessed rapid development of projection-based
+hyperreduced-order models built on nonlinear solution manifolds,
+hereafter referred to as manifold HROMs. In these
+models, the high-dimensional state is represented as a nonlinear
+function of a small set of latent coordinates.
+Galerkin formulations enforce the governing equations on the tangent
+space of the manifold
+\cite{lee2019model,jain2019hyper}, whereas
+least-squares Petrov--Galerkin   formulations determine the
+reduced state through residual minimization
+\cite{lee2019model,barnett2022quadratic,barnett2023neural,chmiel2025unified,
+ares2026nonlinear}. These approaches constitute a natural evolution
+of classical projection-based HROMs \cite{farhat2014dimensional,hernandez2017dimensional}, in which the state is confined
+to a fixed linear space, typically obtained from solution snapshots
+through proper orthogonal decomposition (POD), computed in turn via the     singular value decomposition (SVD).
+Among the various strategies encompassed by the term
+``hyperreduction'',   we focus here on
+  \emph{sampling-and-weighting} procedures, in which the full-order evaluation
+  of the nonlinear terms entering the reduced equations is
+replaced by a positive linear combination of a   subset of local
+contributions. This class includes the
+Energy-Conserving Sampling and Weighting method (ECSW)
+\cite{farhat2014dimensional,farhat2015structure},
+the Empirical Cubature Method (ECM)
+\cite{hernandez2017dimensional,hernandez2020multiscale}, and the
+Empirical Quadrature Procedure (EQP)
+\cite{yano2019lp,yano2019discontinuous}.
 
 %
-% \subsection{Organization of the paper}
+% Of the two levels of reduction involved in manifold HROMs---the
+% nonlinear parametrization of the state and the subsequent
+% hyperreduction by sampling-and-weighting---research efforts have so far
+% been concentrated  entirely on the former, ranging from
+% general-purpose autoencoders
+% \cite{lee2019model,fresca2021comprehensive} to approaches that first
+% compress the state linearly via POD and then construct a nonlinear map
+% among the resulting modal coefficients
+% \cite{fresca2022pod,barnett2022quadratic,barnett2023neural,
+% ares2026nonlinear}. In the latter setting, some works choose the latent
+% coordinates as the leading POD coefficients
+% \cite{barnett2023neural,ares2026nonlinear}; Ref.~\cite{koike2026sparse} has recently challenged this
+% singular-value ordering by selecting instead an informative sparse
+% subset of such POD coefficients. Despite these differences, the
+% underlying objective of all these approaches  is the same: to identify a parsimonious set of
+% latent variables and learn the nonlinear map required to reconstruct
+% the state from them.
+
+% Of the two levels of reduction involved in manifold HROMs---the
+% nonlinear parametrization of the state and the subsequent
+% hyperreduction by sampling-and-weighting---research efforts have so far
+% been concentrated almost entirely on the former. A variety of nonlinear
+% state representations have been proposed, including autoencoder-based
+% approaches \cite{lee2019model,fresca2021comprehensive} and methods that
+% combine an initial POD compression with a nonlinear mapping among the
+% resulting modal coefficients
+% \cite{fresca2022pod,barnett2022quadratic,barnett2023neural,
+% ares2026nonlinear,koike2026sparse}. Despite their differences, these
+% approaches share the same objective: to identify a parsimonious set of
+% latent variables and reconstruct the high-dimensional state from them.
+ Of the two levels of reduction involved in manifold HROMs---the
+nonlinear parametrization of the state and the subsequent
+hyperreduction by sampling-and-weighting---research efforts have so far
+been concentrated almost entirely on the former. Representative examples (the list is not exhaustive) include
+methods that learn the nonlinear manifold directly in the
+high-dimensional state space via   autoencoders
+\cite{lee2019model,fresca2021comprehensive}, as well as approaches that
+first compress the state linearly, typically by POD, and subsequently
+construct a nonlinear parametrization in the resulting reduced
+coordinate space
+\cite{fresca2022pod,barnett2022quadratic,barnett2023neural,
+ ares2026nonlinear,koike2026sparse}. Despite their different architectures, all these approaches share the same objective: to identify the smallest set possible  of latent variables and reconstruct with maximum accuracy the high-dimensional training states from them.
 %
-% The remainder of the paper is organized as follows.
-% Section~\ref{sec:FOM} introduces the full-order finite element problem
-% in a form suitable for the subsequent cubature developments.
-% Section~\ref{sec:manifoldHROM} presents the nonlinear-manifold HROM
-% and the corresponding fixed-weight ECM rule.
-% The manifold-adaptive cubature problem is formulated in
-% Section~\ref{sec:MAWECM}, while the greedy pruning strategy used for
-% its solution is presented in Section~\ref{sec:Greedy}.
-% The two numerical examples are discussed in
-% Sections~\ref{sec:metamaterial} and~\ref{sec:DamageProblem},
-% respectively. Finally, Section~\ref{sec:conclusions} contains the
-% concluding remarks. The consistent Newton--Raphson linearization of
-% the adaptive-weight reduced equilibrium equations is given in
-% Appendix~\ref{app:MAW_linearization}.
+% Despite their different architectures, the approaches cited above, which are by no means intended to constitute an exhaustive list, share the same objective: to identify a parsimonious set of latent variables and reconstruct the high-dimensional state from them.
+
+ By contrast, the second compression stage has so far been carried out
+essentially with the same sampling-and-weighting machinery developed
+for standard HROMs; in particular, the manifold HROM formulations in
+Refs.~\cite{jain2019hyper,barnett2023neural,chmiel2025unified,
+ares2026nonlinear} all rely on ECSW. Neither specific algorithms nor
+refinements of existing ones have been devised to exploit the new
+nonlinear-manifold framework. ECSW---and, in essence, the same applies to ECM and EQP---may be
+viewed as seeking a sparse vector of nonnegative weights whose local
+contributions reproduce, within a prescribed accuracy, those of the
+high-dimensional model over the training set. These contributions are
+assembled into a matrix that collects, for every candidate spatial
+entity, the projected contributions generated over the sampled states.    Passing from a linear HROM
+to a manifold HROM reduces the number of such conditions generated at
+each state (and hence the size of the matrix), because projection is now performed onto a much smaller
+state-dependent tangent space; this reduction in the number of
+conditions per state helps explain the smaller sampled meshes reported
+for manifold HROMs using ECSW, in comparison with standard HROMs, in
+Refs.~\cite{jain2019hyper,barnett2023neural,ares2026nonlinear,
+chmiel2025unified}.
+Yet the underlying approach remains essentially unchanged: a
+single weight vector is required to satisfy the conditions from all
+training states simultaneously. Since the constraints are linear,  the resulting rule should be able to reproduce, not only the conditions obtained from the training data, but the entire linear span of such conditions, including combinations that need not correspond to any state on the solution manifold.
+
+\subsection{Motivation for using adaptive weights}
+ It is precisely this global linear character of the standard
+sampling-and-weighting construction that we challenge in the present paper.
+ Our central claim is that this standard approach does not fully exploit the
+nonlinear-manifold structure underlying the reduced model.
+ If the state is parameterized on a curved manifold, and
+quantities entering the reduced equations---such as the test functions
+in a Galerkin projection---change as the solution moves over that
+manifold, then the positive weights used for hyperreduction should
+change as well, rather than remain fixed over all latent states. The
+expected consequence of this adaptiveness is a further reduction in
+the number of spatial entities---elements, control volumes, or
+integration points---that must be retained to reproduce the
+full-order contributions entering the reduced equations.
+
+
+ The mechanism by which adaptive weights can reduce the number of
+required spatial entities can be readily illustrated by a simple
+quadrature problem---sampling-and-weighting hyperreduction can be
+interpreted, in essence, as a quadrature/cubature problem, as made
+explicit by the ECM and EQP
+\cite{hernandez2017dimensional,yano2019lp}, as well as by the pioneering
+work of Ref.~\cite{an2009optimizing}. Consider the one-dimensional family
+\(f_q(x)=x^q\), with \(x\in[0,1]\) and
+\(q\in\{0,1,\ldots,P\}\), whose exact integral is
+\(I(q)=\int_0^1 f_q(x)\,dx=1/(q+1)\). Here, the monomial exponent
+\(q\) may be regarded as a discrete latent coordinate, while any
+\(x\in[0,1]\) is a potential sampling point. It can be readily seen that, if a single fixed-weight rule is required
+to integrate every latent state exactly,  $I(q) = \sum_{g=1}^{m} f_q(x_g)\,\omega_g$,
+then it must also integrate
+their complete linear span, namely, the polynomial space
+of degree at most \(P\). Even the optimal Gauss--Legendre rule therefore
+requires \(m\geq (P+1)/2 \) sampling points ---the
+required number of integration points grows linearly with the number
+of latent states. By contrast, if one retains a single sampling point,
+say \(x_1=1\), and allows its weight to depend on the latent coordinate,
+then \(I(q)=\omega_1(q)f_q(x_1)\), with \(\omega_1(q)=1/(q+1)\); thus, one
+point suffices for every \(q\), irrespective of \(P\).  The gain in efficiency (from \(m\geq (P+1)/2 \) points to just $m=1$ point ) comes thus
+  from allowing the weight to adapt to the latent state, as asserted.
+
+
+
+In a more practical context, further evidence that adaptive weights can
+substantially reduce the number of sampled spatial entities is provided
+by our previous work~\cite{bravo2024subspace} on
+local HROMs. In local HROMs, the solution manifold is represented
+piecewise by a collection of local linear subspaces, each associated
+with a different region of the solution space. Sampling-and-weighting
+hyperreduction in this setting was first explicitly addressed in Ref.~\cite{grimberg2021mesh}. Building on this setting, and
+using the Empirical Cubature Method, ECM, as the basic point-selection
+procedure, our proposal in Ref.~\cite{bravo2024subspace} was to endow
+each subspace with its own nonnegative weights while retaining a common
+set of cubature (i.e., integration) points; we termed the resulting
+approach the Subspace-Adaptive Weights ECM (SAW--ECM). Numerical
+results  in Ref.~\cite{bravo2024subspace} showed that, as the local representation is progressively
+refined, the required common support decreases markedly, approaching
+in the limiting regime a size governed by the  dimension of the parameter space rather than by the dimension of the global span of all
+subspaces.
+
+
+\subsection{Manifold-adaptive weights ECM}
+\label{sec:mawECMintro}
+
+
+The main novel contribution of the present work is the extension of the
+SAW--ECM described above from a discrete collection of subspaces to a
+continuously parameterized nonlinear manifold. In direct analogy with
+the terminology of Ref.~\cite{bravo2024subspace}, we term the resulting
+method the \emph{Manifold-Adaptive Weights ECM} (MAW--ECM).
+
+
+
+In passing from a discrete collection of subspaces in the SAW--ECM to a
+continuous manifold in the proposed MAW--ECM, the subspace index associated to each local subspace is replaced by the latent
+coordinates, so that each spatial entity is endowed with a
+positive weight field over the latent space. This transition introduces, however, an essential additional
+requirement: the corresponding weight fields should be as smooth as
+possible over the latent space.  Such smoothness is important because the discrete weight samples must
+ultimately be represented by regression over the latent domain; strong
+local oscillations would compromise both the accuracy of this
+regression and the robustness of the nonlinear solution procedure
+(Newton--Raphson in the examples considered here).   To enforce this smoothness requirement, we propose to modify the sparsification-type optimization problem of
+Ref.~\cite{bravo2024subspace} by adding a   graph-based
+ regularization term into the objective function, thereby penalizing irregular variations
+of the weight fields.
+
+As in Ref.~\cite{bravo2024subspace}, and also in the standard ECSW,
+ECM, and EQP, the resulting sparsification problem is NP-hard
+\cite{natarajan1995sparse} because of the presence of the \(\ell_0\) pseudo-norm,
+which   measures the number of nonzero entries of the weight vectors. Practical approaches to \(\ell_0\)-minimization
+typically rely either on suboptimal greedy or active-set procedures,
+as in ECM and ECSW, or on suitable convex relaxations, most commonly
+obtained by replacing the \(\ell_0\) objective with an
+\(\ell_1\)-based surrogate promoting sparsity, as in EQP \cite{yano2019discontinuous,yano2019lp}. The latter
+strategy was explored by the authors in
+Ref.~\cite{bravo2024subspace} for the SAW--ECM. The main conclusion
+drawn there, which carries over to the problem at hand, is that this
+\(\ell_1\)-based convexification route is not viable in practice, since
+it requires stacking all adaptive weight vectors into a single global
+optimization variable from the outset and, in doing so, fails to
+exploit the fundamentally local structure of the constraints
+associated with each sampled latent state.
+
+
+Accordingly, the present work does not pursue this \(\ell_1\)-based route, but
+instead adopts a greedy iterative strategy that avoids treating the entire
+global optimization variable simultaneously at all iterations. The underlying idea is inspired by
+the \emph{pruning} strategies employed in the derivation of generalized
+quadrature rules \cite{bremer2010nonlinear,xiao2010numerical,hernandez2024cecm},
+where the goal
+is likewise to identify the smallest possible set of integration points,
+including both their positions and weights.   The analogy with the present MAW--ECM setting is the following. In both
+cases, sparsification starts from an already feasible cubature rule and
+proceeds through successive pruning steps in which integration points are
+removed while the remaining weights are redistributed so as to preserve the
+constraints.
+The essential difference lies in the nature of the design variables. In
+generalized quadrature, such as in the  continuous version of the ECM proposed by the authors in Ref.~\cite{hernandez2024cecm},   both the positions and the weights of the
+cubature points evolve continuously during pruning. In the present MAW--ECM
+setting, by contrast, the candidate entities are fixed in space  (i.e., Gauss points inherited
+from the FE discretization), and only the manifold-dependent weights are
+modified.   At each tentative elimination, redistributing the remaining weights leads
+to a convex quadratic program with linear equality and positivity
+constraints. A key ingredient of the proposed procedure is an algorithm
+that exploits the local structure of the state-wise constraints and
+activates the graph regularization---the most computationally demanding
+component of the method---only when required to preserve positivity.
+
+%
+%  We therefore devise a tailored algorithm that takes advantage of the
+% local character of the state-wise constraints and invokes a
+% graph-coupled regularization---the most computationally demanding
+% ingredient---only when required to preserve positivity.   The resulting
+% pruning strategy is developed in Section~\ref{sec:Greedy}.
+
+%Moreover, these adaptive weights cannot evolve independently from
+%one latent state to another, but must vary smoothly over the latent manifold,
+%which is precisely the role of the above mentioned regularization term.
+
+
+%
+% This philosophy was adopted by the
+% authors in Ref.~\cite{hernandez2024cecm} to derive a
+% continuous\footnote{The qualifier continuous refers to the fact that the
+% positions of the cubature points are treated as continuous design variables,
+% rather than as members of a discrete candidate set subject to selection.}
+% version of ECM.
+%
+%
+% in Problem \refeq{eq:MAW_global_l0}. In the ensuing section, we develop in detail the complete algorithmic
+% structure of the proposed greedy pruning strategy.
+
+
+% Accordingly, the present work does not pursue the \(\ell_1\)-based
+% route, but adopts instead a greedy pruning strategy inspired by
+% generalized quadrature rules
+% \cite{bremer2010nonlinear,xiao2010numerical}, and in particular by the continuous\footnote{Continuous in the sense that the position of the integration points are continuous design variables of the problem, that is, they are not chosen among the FE Gauss points. } version of the ECM, advocated by the authors in Ref. \cite{hernandez2024cecm}.  Starting from an already feasible cubature rule with fixed weights, integration points are removed
+% successively while the remaining weights are redistributed over the latent space so as to
+% preserve the constraints.
+%
+%
+%
+% At each tentative elimination, the redistribution of the remaining
+% weights gives rise to a convex quadratic program with linear equality
+% and positivity constraints. Although such problems can in principle
+% be handled by general-purpose optimization algorithms
+% \cite{boyd2004convex,Nocedal1999}, repeatedly doing so becomes
+% impractical because the locality of the constraints is not exploited.
+% We therefore devise a tailored algorithm that takes advantage of the
+% local character of the state-wise constraints and invokes a
+% graph-coupled regularization---the most computationally demanding
+% ingredient---only when required to preserve positivity.   The resulting
+% pruning strategy is developed in Section~\ref{sec:Greedy}.
+
+
+  \subsection{Input-informed construction of the nonlinear manifold}
+ \label{sec:inputinformed}
+The proposed methodology is assessed on two nonlinear finite element (FE) solid-mechanics
+benchmarks: a large-strain hyperelastic homogenization problem (Section~\ref{sec:metamaterial}) and a
+history-dependent damage problem (Section~\ref{sec:DamageProblem}).
+A prerequisite for applying the
+MAW--ECM is the identification of suitable latent coordinates and the
+corresponding nonlinear function between high-dimensional state and such latent variables (we call it here the  \emph{decoder}).   As in Refs.~\cite{barnett2023neural,ares2026nonlinear,koike2026sparse},
+we first apply POD to obtain a linear compression of the state and then
+construct the nonlinear decoder in terms of the resulting modal
+coefficients. Our approach differs in the definition of the latent
+coordinates.  Whereas
+Refs.~\cite{barnett2023neural,ares2026nonlinear} identify them with the
+leading POD coefficients, and Ref.~\cite{koike2026sparse} selects an
+informative subset not necessarily following the singular-value
+ordering, here the latent coordinates are allowed to be arbitrary
+linear combinations of the retained modal coefficients.
+Our proposal is that the identification of these linear combinations should should also exploit
+the associated problem inputs, as well as, when relevant,  their relative arrangement,
+encoded through a graph over the training states. More specifically, in the
+hyperelastic problem of Section~\ref{sec:metamaterial}, the input parameters
+are used directly in a least-squares identification, while in the damage
+problem of Section~\ref{sec:DamageProblem}, the nonlinear component of the
+latent vector is identified from the damage-evolving states through a
+graph-based eigenvalue problem informed by the loading history. In both cases, we manage to identify the intrinsic
+dimensionality of the solution manifold, i.e., the minimum number of
+independent latent coordinates required for its representation.
+
+ To the best of the authors' knowledge, this input-informed approach to
+constructing the POD-based decoder constitutes an original contribution
+of the present work, particularly for history-dependent deformations,
+where the loading history, its graph structure, and constitutive
+information guide the identification of the latent coordinates. A related recent work  \cite{zhang2026unified}   has considered    manifold HROMs for
+history-dependent problems, with POD-based  decoder  and fixed-weight ECSW hyperreduction;  however, they do not seek an
+intrinsically minimal latent representation (  latent variables are chosen as leading POD coefficients), nor do they construct the
+decoder using problem-specific graph-based, input information   (the nonlinear component is   quadratic ).
+
+
+%
+
+
+% \PROMPT{\input{PromptOriginal2}}
+% %\input{Original2}
+% \PROMPT{\input{PromptOriginal3}}
+% \input{Original3}
+
+%
+%
+%
+% The
+% identification of such linear combinations is not based exclusively on the solution snapshots, but
+% also exploits the input parameters associated with them. In the hyperelastic problem, these parameters are used directly in a
+% least-squares identification. In the damage problem, the state is first
+% decomposed into linear and nonlinear components, and the latent
+% coordinate associated with the nonlinear component is identified from
+% the damage-evolving states through a graph-based eigenvalue problem
+% that exploits the corresponding loading information. This input-informed decoder construction constitutes an additional original contribution of the work; the specific procedures are, however, tailored to the problems considered here and are not intended to define a general manifold-learning methodology.
+
+\subsection{Scope}
+
+
+
+% We choose parametrized, quasi-static nonlinear solid finite element
+% problems as the vehicle for presenting and assessing the proposed
+% methodology. More specifically, the formulation is cast in terms of
+% Gauss-point sampling (i.e., as a truly cubature problem) and finite-element quantities such as internal
+% forces. This setting is not, however, intrinsic to MAW--ECM, which can
+% in principle be extended to dynamic solid problems, other governing
+% equations, and discretizations other than finite elements, provided that
+% the corresponding local contributions and invariant constraints to be preserved by
+% the adaptive rule are
+% defined appropriately. Likewise,  the same construction can also be applied as a
+% mesh-sampling procedure of the ECSW type, as already done with the
+% fixed-weight ECM for standard HROMs in
+% Refs.~\cite{ares2023hyper,bravo2024geometrically}.
+
+% We choose parametrized, quasi-static nonlinear solid finite element
+% problems  subject to affine kinematic constraints  as the vehicle for presenting and assessing the proposed
+% methodology. More specifically, the formulation is cast in terms of
+% interior Gauss-point sampling (i.e., as a true cubature problem) and the nonlinear term to be hyperreduced is the    projected internal forces together with (possibly) volumetric output of interests.  This setting is not, however, intrinsic
+% to MAW--ECM, which can in principle be extended to other scenarios, including dynamic solid problems,
+% other governing equations, and discretizations other than finite elements,
+% provided that the corresponding local contributions and invariant
+% constraints to be preserved by the adaptive rule are defined appropriately.
+%  Likewise, the restriction to Gauss-point selection is a choice rather
+% than an intrinsic requirement of the method. MAW--ECM may also be posed
+% as a mesh-sampling procedure, as already done with fixed-weight ECM for
+% standard HROMs in Refs.~\cite{ares2023hyper,bravo2024geometrically}.
+
+
+We choose parametrized, quasi-static nonlinear solid finite element
+problems subject to affine kinematic constraints as the vehicle for
+presenting and assessing the proposed methodology. More specifically, the
+formulation is cast in terms of interior Gauss-point sampling (i.e., as a
+true cubature problem), with the projected internal forces and, when
+applicable, volumetric quantities of interest as the terms to be
+hyperreduced. These choices are not intrinsic to MAW--ECM, which can in
+principle be extended to other scenarios, including dynamic solid
+problems, other governing equations, and discretizations other than
+finite elements, provided that the corresponding local contributions and
+invariant constraints to be preserved by the adaptive rule are defined
+appropriately. Likewise, within the finite element setting, Gauss-point
+selection is only one possible realization: MAW--ECM may also be posed as
+a mesh-sampling procedure, as already done with fixed-weight ECM for
+standard HROMs in Refs.~\cite{ares2023hyper,bravo2024geometrically}.
+
+As for the input-informed POD-based decoders, the particular
+constructions used in the two benchmarks are tailored to the problems
+considered, and no claim is made here regarding their generality as
+manifold-learning procedures. Finally, given the exploratory character of this study, the numerical
+assessment is deliberately restricted to low-dimensional parameter and
+latent spaces, for which the adaptive weight fields  can be directly visualized and interpreted.
+Scalability to substantially higher-dimensional spaces, particularly
+regarding the construction a  of the latent graph used for regularization, lies
+outside the scope of the present work.
+
+
+%
+% The formulation and numerical assessment presented in this work are
+% restricted to parametrized, quasi-static nonlinear solid finite element
+% problems subject to affine kinematic constraints.  Nevertheless, MAW--ECM can in principle be extended to dynamic solid
+% problems, other governing equations, such as those of fluid dynamics,
+% and discretizations other than finite elements, including finite-volume
+% schemes. Such extensions require, however, appropriate care in defining
+% the local contributions and the invariant constraints to be preserved by
+% the adaptive rule.
+
+% In the proposed MAW--ECM, the acronym ECM, Empirical Cubature Method,
+% refers to the algorithmic backbone of the approach, not to a restriction
+% to cubature problems; the same construction can also be applied as a
+% mesh-sampling procedure of the ECSW type, as already done with the
+% fixed-weight ECM for standard HROMs in
+% Refs.~\cite{ares2023hyper,bravo2024geometrically}.
+
+
+
+
+
+
+%
+%
+%
+% %\input{Intro11ChatGPT}
+% \PROMPT{\input{PromptScope}}
+% \input{Intro12ChatGPT}
 
 \section{Full-order finite element model}
 \label{sec:FOM}
-\subsection{Constrained kinematics}
-\label{sec:FOM_kinematics}
+% \subsection{Constrained kinematics}
+% \label{sec:FOM_kinematics}
+% %
+% We use a parametrized, quasi-static nonlinear structural FE problem
+% with affine kinematic constraints as a vehicle for presenting the proposed
+% adaptive-weight hyperreduction. The mechanical state is assumed to depend on a
+% parameter vector \(\muvec\in \Pmu \subset\mathbb{R}^{\nmu}\), which may
+% represent   prescribed displacements  and/or  applied forces. In history-dependent problems, this dependence is to be understood
+% incrementally, with the current response also depending on the previously
+% converged internal variables.
 
-We use a parametrized, quasi-static nonlinear structural finite element problem
-with affine kinematic constraints as a vehicle for presenting the proposed
-adaptive-weight hyperreduction procedure. The mechanical state is assumed to depend on a
-parameter vector \(\muvec\in \Pmu \subset\mathbb{R}^{\nmu}\), which may
-represent   prescribed displacements  and/or  applied forces. In history-dependent problems, this dependence is to be understood
-incrementally, with the current response also depending on the previously
-converged internal variables.
 
-The FE nodal displacement vector $\dFE \in \Rn{\nDOFS}$ is written as
+% This parametrization covers the two situations considered in
+% the numerical benchmarks of Sections~\ref{sec:metamaterial}
+% and~\ref{sec:DamageProblem}. In the metamaterial-cell benchmark of Section \ref{sec:metamaterial}, \(\Tlift\) enforces the
+% periodic master--slave relations between boundary degrees of freedom, whereas
+% $\dBOUND$ represents the affine boundary displacement induced by the
+% prescribed macroscopic displacement gradient. In the damage benchmark of Section \ref{sec:DamageProblem}, the
+% essential boundary conditions are homogeneous; consequently,
+% \(\dBOUND=\bm{0}\), and \(\Tlift\) reduces to the standard Boolean
+% operator that maps the unconstrained degrees of freedom into the full nodal
+% space.
+
+% \subsection{Residual equation in the constrained space}
+% \label{sec:FOM_residual}
+
+Let us  consider a general,  parametrized, quasi-static nonlinear solid FE problem
+subject to affine kinematic constraints, in which  the solution
+  depends on an input parameter vector
+\(\muvec\in\Pmu\subset\mathbb{R}^{\nmu}\), which may
+represent   prescribed displacements  and/or  applied forces.   In history-dependent problems, this
+dependence is understood incrementally, with the current response also
+depending on the previously converged internal variables. The FE nodal displacement vector $\dFE \in \Rn{\nDOFS}$ is written as
 \begin{equation}
 \label{eq:dvecreconstruction}
  \dFE = \Tlift \dred  + \dBOUND ,
@@ -511,21 +632,7 @@ The FE nodal displacement vector $\dFE \in \Rn{\nDOFS}$ is written as
 where \(\dred\in\mathbb{R}^{\nL}\)  ($\nL < \nDOFS$) collects the independent degrees of freedom,
 \(\Tlift\) is the lifting operator associated with the homogeneous constrained
 space, and \(\dBOUND=\dBOUND(\muvec)\) accounts for the affine prescribed
-kinematic data. This parametrization covers the two situations considered in
-the numerical benchmarks of Sections~\ref{sec:metamaterial}
-and~\ref{sec:DamageProblem}. In the metamaterial-cell benchmark of Section \ref{sec:metamaterial}, \(\Tlift\) enforces the
-periodic master--slave relations between boundary degrees of freedom, whereas
-$\dBOUND$ represents the affine boundary displacement induced by the
-prescribed macroscopic displacement gradient. In the damage benchmark of Section \ref{sec:DamageProblem}, the
-essential boundary conditions are homogeneous; consequently,
-\(\dBOUND=\bm{0}\), and \(\Tlift\) reduces to the standard Boolean
-operator that maps the unconstrained degrees of freedom into the full nodal
-space.
-
-\subsection{Residual equation in the constrained space}
-\label{sec:FOM_residual}
-
-We define the full finite element residual $\Rfe \in \Rn{\nDOFS}$ as
+kinematic data. We define the full finite element residual $\Rfe \in \Rn{\nDOFS}$ as
 \begin{equation}
 \label{eq:Rfe_definition}
     \Rfe(\dred;\muvec)
@@ -573,9 +680,7 @@ deformation gradient. In the damage
 problem considered in Section~\ref{sec:DamageProblem}, the formulation is
 small-strain; consequently, in this case,  \(\PKone\) is to be replaced by the Cauchy stress
 vector, and \(\Bmat\) becomes the standard finite element
-strain--displacement matrix.
-
-We next expand the integral in Eq.~\refeq{eq:Fint_continuous_general} as the sum of the   contributions of each finite element, and then approximate  such element contributions by Gauss quadrature; this leads to:
+strain--displacement matrix. We next expand the integral in Eq.~\refeq{eq:Fint_continuous_general} as the sum of the   contributions of each finite element, and then approximate  such element contributions by Gauss quadrature; this leads to:
 \begin{equation}
 \label{eq:Fint_FE_general}
     \Fint
@@ -599,8 +704,8 @@ Finally, we reindex the element/Gauss-point pairs \((e,i)\) by a
 single global index \(g=1,\ldots,\ngp\) (here \(\ngp\) denotes the total number of Gauss points).   This numbering defines a
 bijection between \(g\) and the corresponding pair
 \((e(g),i(g))\), where \(e(g)\) identifies the element containing the
-point and \(i(g)\) its local Gauss-point index. The projected internal
-force can then be written as
+point and \(i(g)\) its local Gauss-point index. The constrained internal
+force appearing in Eq.~\refeq{eq:FOM_equilibrium_lifted} can then be written as
 \begin{equation}
 \label{eq:projected_internal_force_gp}
     \Tlift^T\Fint
@@ -640,19 +745,19 @@ associated with unit values of the components of \(\muvec\).
 
 
 
+%
+% \begin{remark}[External forces]
+%  It should be stressed that the
+%   assumption of external forces independent of the state variable is only an expositional simplification, not a restriction of
+% the cubature framework. If displacement-dependent body forces were present,
+% their contribution could be incorporated into the volume integrand and treated
+% together with the  terms defining \(\rFE{g}\) in Eq. \ref{eq:rFE_general}. Likewise, displacement-dependent boundary tractions, such as follower loads, would be
+% handled in the same way as the volume terms described in what follows, the only difference being that the sum over interior Gauss points would be replaced by a sum over
+% boundary   Gauss points.
+% \end{remark}
 
-\begin{remark}[External forces]
- It should be stressed that the
-  assumption of external forces independent of the state variable is only an expositional simplification, not a restriction of
-the cubature framework. If displacement-dependent body forces were present,
-their contribution could be incorporated into the volume integrand and treated
-together with the  terms defining \(\rFE{g}\) in Eq. \ref{eq:rFE_general}. Likewise, displacement-dependent boundary tractions, such as follower loads, would be
-handled in the same way as the volume terms described in what follows, the only difference being that the sum over interior Gauss points would be replaced by a sum over
-boundary   Gauss points.
-\end{remark}
 
-
-Substituting Eqs.~\refeq{eq:projected_internal_force_gp}
+Finally, substituting Eqs.~\refeq{eq:projected_internal_force_gp}
 and~\refeq{eq:fextlift_linear} into
 Eq.~\refeq{eq:FOM_equilibrium_lifted} gives the full-order equilibrium
 equations in a form that makes explicit the loop over all Gauss points of the
@@ -672,25 +777,22 @@ unknowns \(\dred\in\Rn{\nL}\), to be solved for prescribed values of
 internal variables from the previous pseudo-time step; for simplicity, this dependence is
 omitted in the formulation that follows.
 
+%
+% \begin{remark}
+% In many finite element codes, the user may not have
+% access to the individual integration-point contributions, but only to
+% the total element output, i.e., to the result of summing over all Gauss
+% points of the element. The developments that follow apply equally in
+% that case: one only has to replace the sum over Gauss points by a sum
+% over elements and interpret the local contribution either as an
+% element-volume average, with the element volume as weight, or as the
+% full element contribution, with the weight absorbed into its
+% definition. In the latter interpretation, the resulting procedure
+% becomes a mesh-selection and weighting strategy, in the spirit of the
+% ECSW method~\cite{farhat2014dimensional}.
+% \end{remark}
 
-\begin{remark}[Cubature versus mesh sampling and weighting]
-The formulation above is written in terms of Gauss-point contributions
-because the hyperreduction problem is cast as a quadrature/cubature
-problem. In many finite element codes, however, the user may not have
-access to the individual integration-point contributions, but only to
-the total element output, i.e., to the result of summing over all Gauss
-points of the element. The developments that follow apply equally in
-that case: one only has to replace the sum over Gauss points by a sum
-over elements and interpret the local contribution either as an
-element-volume average, with the element volume as weight, or as the
-full element contribution, with the weight absorbed into its
-definition. In the latter interpretation, the resulting procedure
-becomes a mesh-selection and weighting strategy, in the spirit of the
-ECSW method~\cite{farhat2014dimensional}. This interpretation of the
-cubature problem as a mesh-selection and weighting procedure has
-already been used by the authors in standard HROM settings in
-Refs.~\cite{ares2023hyper,bravo2024geometrically}.
-\end{remark}
+
 \subsection{Volumetric outputs of interest}
 \label{sec:FOM_outputs}
 
@@ -792,10 +894,9 @@ the matrix
 \end{bmatrix}
 \in\mathbb{R}^{\nL\times\nsnap}.
 \end{equation}
-  In the numerical examples presented later, we adopt a two-level decoder
+ As already pointed out in Section \ref{sec:inputinformed},    we adopt a two-level decoder
 representation, combining a preliminary linear compression with a
-nonlinear coefficient map, as used, among others, in
-Refs.~\cite{fresca2022pod,barnett2022quadratic,barnett2023neural,ares2026nonlinear,koike2026sparse}. With
+nonlinear coefficient map. With
 this representation, the decoder is expressed in the factorized form
 \begin{equation}
 \label{eq:decoder_tau_generic}
@@ -817,13 +918,7 @@ As customary, the number of modes $\rROM$ in $\PhiROM$ is controlled by a relati
 \leq
 \tolSVDd, \qquad  \PhiROM^T \PhiROM = \ident,
 \end{equation}
-where $\normF{}$ stands for the Frobenius norm   ($\PhiROM$ may be obtained as the left singular vectors of  a truncated singular value decomposition, SVD, of \(\Dsnap\), for instance).
-
-
-\PROMPT{\input{PromptNewDecoder_1}}
-
-%\input{NewDecoder1}
-%\input{NewDecoder2}
+where $\normF{}$ stands for the Frobenius norm   ($\PhiROM$ may be obtained as the left singular vectors of  a truncated  SVD of \(\Dsnap\), for instance).
 If the latent coordinates \(\qM\) have already been identified, the map
 \(\TAU\) can be fitted by standard regression procedures. By contrast, if the latent coordinates are not known a priori, they may instead be
 learned jointly with the coefficient map through an autoencoder-based
@@ -851,17 +946,28 @@ of determining
 barnett2023neural,ares2026nonlinear} use the SVD to determine $\PhiROM$, and  adopt $\Tm=[\,\ident_{\rD}\ \bm{0}\,]$,
 where \(\ident_{\rD}\) is the \(\rD\times\rD\) identity matrix; the
 latent coordinates are therefore the leading entries of \(\qrom\),
-associated with the largest singular values.    Reference~\cite{koike2026sparse}, on the other hand,  argues that this singular-value
-ordering need not provide the most parsimonious latent representation, and allows  \(\Tm\) to select an arbitrary sparse
+associated with the largest singular values.    Reference~\cite{koike2026sparse}, on the other hand,  allows  \(\Tm\) to select an arbitrary sparse
 subset of the modal coefficients.
+
+
+% The identification adopted in the examples discussed later departs from this Boolean selection
+% strategy, in the sense that the matrix \(\Tm\) is not constrained to
+% select individual entries of \(\qrom\), but may be dense, allowing each
+% latent coordinate to combine all the modal coefficients.
 
 
 The identification adopted in the examples discussed later departs from this Boolean selection
 strategy, in the sense that the matrix \(\Tm\) is not constrained to
 select individual entries of \(\qrom\), but may be dense, allowing each
 latent coordinate to combine all the modal coefficients. Its
-determination instead exploits the particular parametrization of the
-problem, and the type of governing equation to be reduced. Further details on the identification of $\Tm$ will be discussed in Sections \ref{sec:meta_manifold_representation} and \ref{sec:id2}.
+identification is instead input-informed, in the sense discussed in
+Section~\ref{sec:inputinformed}. Further details on the identification of $\Tm$ will be given in Sections \ref{sec:meta_manifold_representation} and \ref{sec:id2}.
+
+%
+%
+% Its
+% determination instead exploits the particular parametrization of the
+% problem, and the type of governing equation to be reduced.
 
 Regardless of the particular expression for $\Tm$,  assumption \refeq{eq:qMdefq} together with Eq.~\ref{eq:qrom_definition}, defines the following master-slave decomposition for the modal coefficients
 \begin{equation}
@@ -881,7 +987,7 @@ modes, whereas
     \qquad
     \PhiM^T\PhiS=\zero
 \end{equation}
-( \(\PhiS\) is as an orthonormal basis for the
+( \(\PhiS\) is  therefore an orthonormal basis for the
 orthogonal complement of \(\Col(\PhiM)\) within \(\Col(\PhiROM)\), and hence \([\PhiM\ \PhiS]\) spans \(\Col{(\PhiROM)}\)). On the other hand, $\Am \in \RRn{\rD}{\rD}$ is a scaling matrix. The matrices \(\PhiM\) and \(\Am\) are obtained from the compact SVD of $\PhiROM\Tm^T$; in particular \(\PhiM\) contains the corresponding left singular
 vectors, i.e.:
 \begin{equation}
@@ -924,7 +1030,7 @@ expression for the coefficient map in Eq. \refeq{eq:decoder_tau_generic}:
     \begin{bmatrix}
         \Am\qM\\
         \Nslave(\qM)
-    \end{bmatrix}.
+    \end{bmatrix},
 \end{equation}
 and for its Jacobian:
 \begin{equation}
@@ -933,9 +1039,9 @@ and for its Jacobian:
 :=
 \derpar{\TAU}{\qM} = \begin{bmatrix}
                              \Am  \\
-                             \derpar{\Nslave(\qM)}{\qM}.
+                             \derpar{\Nslave(\qM)}{\qM}
                      \end{bmatrix}
-\end{equation}
+\end{equation}.
 
 Lastly, we particularize the encoder introduced in
 Eq.~\refeq{eq:inversemapping} for the master--slave decoder in
@@ -1444,7 +1550,7 @@ encoding neighborhood relations on the latent manifold.  The Laplacian of
 weight fields between neighboring states.
 
 
-The subsampling represented by expression~\refeq{eq:PmuM_definition}   serves the usual
+The subsampling represented by expression~\refeq{eq:PmuM_definition}   may serve the usual
 purpose of avoiding an unnecessarily fine representation of the weight
 fields and the associated risk of overfitting. In some problems,
 however,  restricting the
@@ -1482,12 +1588,15 @@ The second condition is the local counterpart of Eq.~\refeq{eq:ECM_volume_constr
 \item \label{item:smooth}
  Each scalar field
 \(\omegag{g}=\omegag{g}(\qM)\), \(g\in\Zomega\), should vary as smoothly
-as possible over the manifold. This requirement is motivated by the
-fact that the weight fields will ultimately be represented through a
-regression procedure over the latent domain. Strong local oscillations
-or abrupt changes between neighboring sampled states would therefore
-compromise both the accuracy of this regression and the robustness of
-the Newton--Raphson solution of the reduced equilibrium equations.
+as possible over the manifold.
+
+
+% This requirement is motivated by the
+% fact that the weight fields will ultimately be represented through a
+% regression procedure over the latent domain. Strong local oscillations
+% or abrupt changes between neighboring sampled states would therefore
+% compromise both the accuracy of this regression and the robustness of
+% the Newton--Raphson solution of the reduced equilibrium equations.
 
 
 \end{enumerate}
@@ -1572,11 +1681,9 @@ integration conditions. These are collected in the invariant matrix
 \mathbb{R}^{\ngp\times\ninv}.
 \end{equation}
 At minimum, \(\Uinv\) contains the all-ones vector
-\(\onevec\), so that the volume constraint in
+\(\onevec \in \Rn{\ngp}{}\), so that the volume constraint in
 Eq.~\refeq{eq:ECM_volume_constraint} is enforced at every
-state.
-
-To remove linearly dependent conditions, the invariant and projected
+state. To remove linearly dependent conditions, the invariant and projected
 integrand blocks are combined and factorized by an SVD:
 \begin{equation}
 \label{eq:invariants}
@@ -1743,83 +1850,89 @@ j=1,\ldots,\nM .
 
 The solution determines simultaneously the state-dependent weights and
 the final common support \(\Zomega\), identified by the nonzero rows of
-\(\Wad\).
+\(\Wad\).  As discussed in
+Section~\ref{sec:mawECMintro}, we   adopt a greedy pruning strategy. Starting from the feasible
+fixed-weight ECM rule, integration points are removed successively while
+the remaining manifold-dependent weights are redistributed so as to
+preserve the local equality and positivity constraints and control the
+regularity of the resulting weight fields. The resulting pruning
+strategy is developed in the next section.
 
 
 
-
-The formulation of Problem~\eqref{eq:MAW_global_l0} is valuable at the conceptual level because it
-provides an explicit mathematical formulation of the
-sparsification objective underlying MAW--ECM.  Nevertheless, much like the fixed-weight formulation
-in~\eqref{eq:ECM_problem_manifold_fixed}, the problem is not amenable to direct
-solution in practice because it belongs to the class of
-\(\ell_0\)-minimization problems, which are well known to be NP-hard
-\cite{natarajan1995sparse}. In other words, the difficulty stems from the
-combinatorial nature of the \(\ell_0\)-term in the objective function.
-
-
+%
+% The formulation of Problem~\eqref{eq:MAW_global_l0} is valuable at the conceptual level because it
+% provides an explicit mathematical formulation of the
+% sparsification objective underlying MAW--ECM.  Nevertheless, much like the fixed-weight formulation
+% in~\eqref{eq:ECM_problem_manifold_fixed}, the problem is not amenable to direct
+% solution in practice because it belongs to the class of
+% \(\ell_0\)-minimization problems, which are well known to be NP-hard
+% \cite{natarajan1995sparse}. In other words, the difficulty stems from the
+% combinatorial nature of the \(\ell_0\)-term in the objective function.
 
 
-Practical approaches for \(\ell_0\)-minimization problems typically rely either on suboptimal greedy
-procedures or on suitable convex relaxations, most commonly obtained by
-replacing the \(\ell_0\)-objective with an \(\ell_1\)-based surrogate
-promoting sparsity. For instance,  the latter strategy is   the philosophy underlying the Empirical Quadrature Method, EQM, introduced by Patera and co-workers
-\cite{yano2019discontinuous,yano2019lp} to solve Problem   \eqref{eq:ECM_problem_manifold_fixed} in alternative way to that of those based on nonnegative least-squares concept, as in the ECM   and the ECSW.
-
+%
+%
+% Practical approaches for \(\ell_0\)-minimization problems typically rely either on suboptimal greedy
+% procedures or on suitable convex relaxations, most commonly obtained by
+% replacing the \(\ell_0\)-objective with an \(\ell_1\)-based surrogate
+% promoting sparsity. For instance,  the latter strategy is   the philosophy underlying the Empirical Quadrature Method, EQM, introduced by Patera and co-workers
+% \cite{yano2019discontinuous,yano2019lp} to solve Problem   \eqref{eq:ECM_problem_manifold_fixed} in alternative way to that of those based on nonnegative least-squares concept, as in the ECM   and the ECSW.
+%
 
 %\PROMPT{\input{Prompt_pruning2}}
 
-%\input{Pruning_2}
-%\input{Pruning_3}
-The \(\ell_1\)-based convexification route was previously explored by the
-authors in Ref.~\cite{bravo2024subspace} in the context of the subspace-adaptive weights
- ECM  (the sparsification problem  in this problem is structurally
-analogous to Problem~\eqref{eq:MAW_global_l0}, but without the
-manifold-regularization term). The main
-conclusion drawn in Ref.~\cite{bravo2024subspace} (and that applies for the problem at hand) is that the \(\ell_1\)-based
-convexification route is not viable in practice. The reason is twofold. Firstly, the LP formulation requires stacking all the
-adaptive weight vectors into a single global optimization variable from the beginning (in the
-present notation, this amounts to vectorizing the matrix \(\Wad\) introduced
-in Eq.~\eqref{eq:adaptive_weight_matrix}, leading to a variable of dimension \(\mInit\nM\)). In
-doing so, the formulation loses sight of the fundamentally local nature of the
-cubature constraints associated with each sampled latent state, while the
-computational cost rapidly becomes prohibitive as \(\nM\) grows. Secondly,
-even in relatively small problems for which the LP problem remains tractable,
-the numerical experiments reported in Ref.~\cite{bravo2024subspace} shows that the
-resulting supports were systematically larger than those obtained with  greedy  strategies exploiting the local nature of the constraints.
+% %\input{Pruning_2}
+% %\input{Pruning_3}
+% The \(\ell_1\)-based convexification route was previously explored by the
+% authors in Ref.~\cite{bravo2024subspace} in the context of the subspace-adaptive weights
+%  ECM  (the sparsification problem  in this problem is structurally
+% analogous to Problem~\eqref{eq:MAW_global_l0}, but without the
+% manifold-regularization term). The main
+% conclusion drawn in Ref.~\cite{bravo2024subspace} (and that applies for the problem at hand) is that the \(\ell_1\)-based
+% convexification route is not viable in practice. The reason is twofold. Firstly, the LP formulation requires stacking all the
+% adaptive weight vectors into a single global optimization variable from the beginning (in the
+% present notation, this amounts to vectorizing the matrix \(\Wad\) introduced
+% in Eq.~\eqref{eq:adaptive_weight_matrix}, leading to a variable of dimension \(\mInit\nM\)). In
+% doing so, the formulation loses sight of the fundamentally local nature of the
+% cubature constraints associated with each sampled latent state, while the
+% computational cost rapidly becomes prohibitive as \(\nM\) grows. Secondly,
+% even in relatively small problems for which the LP problem remains tractable,
+% the numerical experiments reported in Ref.~\cite{bravo2024subspace} shows that the
+% resulting supports were systematically larger than those obtained with  greedy  strategies exploiting the local nature of the constraints.
 
-
-Accordingly, the present work does not pursue this \(\ell_1\)-based route, but
-instead adopts a greedy iterative strategy that avoids treating the entire
-global optimization variable simultaneously at all iterations. The underlying idea is inspired by
-the \emph{pruning} strategies employed in the derivation of generalized
-quadrature rules \cite{bremer2010nonlinear,xiao2010numerical}, where the goal
-is likewise to identify the smallest possible set of integration points,
-including both their positions and weights. This philosophy was adopted by the
-authors in Ref.~\cite{hernandez2024cecm} to derive a
-continuous\footnote{The qualifier continuous refers to the fact that the
-positions of the cubature points are treated as continuous design variables,
-rather than as members of a discrete candidate set subject to selection.}
-version of ECM.
-
-The analogy with the present MAW--ECM setting is the following. In both
-cases, sparsification starts from an already feasible cubature rule and
-proceeds through successive pruning steps in which integration points are
-removed while the remaining weights are redistributed so as to preserve the
-constraints. Thus, sparsification is viewed not as a global combinatorial
-search over all admissible supports, but rather as a progressive pruning
-process.
-
-The essential difference lies in the nature of the design variables. In
-generalized quadrature rules~\cite{bremer2010nonlinear,xiao2010numerical} and
-in CECM~\cite{hernandez2024cecm}, both the positions and the weights of the
-cubature points evolve continuously during pruning. In the present MAW--ECM
-setting, by contrast, the candidate points are fixed Gauss points inherited
-from the FE discretization, and only the manifold-dependent weights are
-modified. Moreover, these adaptive weights cannot evolve independently from
-one latent state to another, but must vary smoothly over the latent manifold,
-which is precisely the role of the regularization term in Problem \refeq{eq:MAW_global_l0}. In the ensuing section, we develop in detail the complete algorithmic
-structure of the proposed greedy pruning strategy.
+%
+% Accordingly, the present work does not pursue this \(\ell_1\)-based route, but
+% instead adopts a greedy iterative strategy that avoids treating the entire
+% global optimization variable simultaneously at all iterations. The underlying idea is inspired by
+% the \emph{pruning} strategies employed in the derivation of generalized
+% quadrature rules \cite{bremer2010nonlinear,xiao2010numerical}, where the goal
+% is likewise to identify the smallest possible set of integration points,
+% including both their positions and weights. This philosophy was adopted by the
+% authors in Ref.~\cite{hernandez2024cecm} to derive a
+% continuous\footnote{The qualifier continuous refers to the fact that the
+% positions of the cubature points are treated as continuous design variables,
+% rather than as members of a discrete candidate set subject to selection.}
+% version of ECM.
+%
+% The analogy with the present MAW--ECM setting is the following. In both
+% cases, sparsification starts from an already feasible cubature rule and
+% proceeds through successive pruning steps in which integration points are
+% removed while the remaining weights are redistributed so as to preserve the
+% constraints. Thus, sparsification is viewed not as a global combinatorial
+% search over all admissible supports, but rather as a progressive pruning
+% process.
+%
+% The essential difference lies in the nature of the design variables. In
+% generalized quadrature rules~\cite{bremer2010nonlinear,xiao2010numerical} and
+% in CECM~\cite{hernandez2024cecm}, both the positions and the weights of the
+% cubature points evolve continuously during pruning. In the present MAW--ECM
+% setting, by contrast, the candidate points are fixed Gauss points inherited
+% from the FE discretization, and only the manifold-dependent weights are
+% modified. Moreover, these adaptive weights cannot evolve independently from
+% one latent state to another, but must vary smoothly over the latent manifold,
+% which is precisely the role of the regularization term in Problem \refeq{eq:MAW_global_l0}. In the ensuing section, we develop in detail the complete algorithmic
+% structure of the proposed greedy pruning strategy.
 
 \section{Greedy pruning strategy}
 \label{sec:Greedy}
@@ -1827,8 +1940,6 @@ structure of the proposed greedy pruning strategy.
 % \input{GreedyPruning}
 
 
-\subsection{Overview}
-\label{sec:overview1}
 
 To describe the proposed   greedy pruning procedure, we proceed
 hierarchically from its most elementary operation to the final global
@@ -1840,24 +1951,15 @@ adaptive weights can be redistributed so as to preserve the local
 exactness constraints over the sampled manifold. This leads to the
 \emph{local redistribution problem} introduced in
 Section~\ref{sec:redistributionPR}, and  whose solution procedure is
-summarized in Algorithm~\ref{alg:prune_step_optionB}.
-
-
-Subsequently,
+summarized in Algorithm~\ref{alg:prune_step_optionB}.  Subsequently,
 Section~\ref{sec:candidatesweepbranch} introduces
 Algorithm~\ref{alg:graph_candidate_sweep}, whose purpose is to partially
 mitigate the path dependence intrinsic to the greedy pruning strategy by
 exploring several feasible candidate eliminations before committing to
-one of them.
-
-Finally, the complete greedy pruning loop is described in
+one of them. Finally, the complete greedy pruning loop is described in
 Section~\ref{sec:globalpruning} through
 Algorithm~\ref{alg:MAW_global_pruning}, which repeatedly applies the
-candidate-sweep procedure.
-
-
-
-For convenience, the complete offline workflow is summarized in Section \ref{sec:summary},
+candidate-sweep procedure.  For convenience, the complete offline workflow is summarized in Section \ref{sec:summary},
 Box~\ref{box:MAW_ECM_summary}. Readers primarily interested in the
 practical implementation may jump directly to this summary and navigate
 from there to the corresponding algorithms.
@@ -1866,61 +1968,37 @@ from there to the corresponding algorithms.
  \subsection{Redistribution problem}
 \label{sec:redistributionPR}
 
-
-\subsubsection{Definitions}
+%
+% \subsubsection{Definitions}
 %\input{alg_prun0}
 
-Assume that, at a given pruning stage, the current active support is
-\[
-\Iact \subset \{1,\ldots,\mInit\}.
-\]
+Assume that, at a given pruning stage, the current active support is $\Iact \subset \{1,\ldots,\mInit\}$.
 Here, active refers to the integration points that have not yet been
 removed from the initial candidate support.   For each sampled latent state \(\qMj{j}\), the current adaptive
-weights are denoted by
-\[
-\wold{j}\in\mathbb{R}^{|\Iact|}.
-\]
-By construction, they satisfy the local linear equality constraints in Eq.~\refeq{eq:constraintsLOCAL}:
-\[
+weights are denoted by $\wold{j}\in\mathbb{R}^{|\Iact|}$.  By construction, they satisfy the local linear equality constraints in Eq.~\refeq{eq:constraintsLOCAL}:
+\begin{equation}
 \UTact{j}\wold{j}
 =
 \bj{j},
 \qquad
-j=1,\ldots,\nM.
-\]
+j=1,\ldots,\nM,
+\end{equation}
 where \({\Uj{j}}_{\Iact}\) denotes the restriction of \(\Uj{j}\) to
 the active support.  A pruning trial begins by selecting one candidate integration point
-(the selection strategy will be discussed later):
-\[
-p\in\Iact
-\]
-and attempts to remove it. The remaining active support is
-\[
-\Irem
-=
-\Iact\setminus\{p\}.
-\]
-Equivalently, in the local numbering induced by the current active
-support \(\Iact\),
-\[
-\IremLOC
-=
-\{1,\ldots,|\Iact|\}\setminus\{\loc(p,\Iact)\}.
-\]
+(the selection strategy will be discussed later), $
+p\in\Iact$, and attempts to remove it. The remaining active support is $\Irem =
+\Iact\setminus\{p\}$. Equivalently, in the local numbering induced by the current active
+support \(\Iact\), $\IremLOC = \{1,\ldots,|\Iact|\}\setminus\{\loc(p,\Iact)\}$.
 Here, \(\loc(p,\Iact)\) denotes the position occupied by the global
-index \(p\) within the ordered set \(\Iact\). The question is whether, for every sampled latent state
-\(j=1,\ldots,\nM\), one can construct redistributed weights
-\[
-\wnew{j}\in\mathbb{R}^{|\Irem|}
-\]
+index \(p\) within the ordered set \(\Iact\). The question is whether, for every sampled latent state, one can construct redistributed weights $\wnew{j}\in\mathbb{R}^{|\Irem|}$
 such that
-\[
+\begin{equation}
 {\Uj{j}}^T_{\Irem}\wnew{j}
 =
 \bj{j},
 \qquad
 j=1,\ldots,\nM.
-\]
+\end{equation}
 If such weights exist and satisfy the required admissibility conditions,
 the candidate removal is accepted.
 
@@ -2020,15 +2098,7 @@ Indeed, the redistribution is computed as the smallest admissible
 departure from the previously accepted weight fields. Since the initial
 adaptive weights are constant over the latent manifold, successive
 least-change redistributions tend naturally to preserve this smooth
-character and introduce only gradual local modifications\footnote{ This argument is, of course, contingent upon the integrand fields from which the equality constraints are derived
-exhibiting sufficient smoothness over the latent space, a property
-that depends both on the regularity of the decoder
-\(\Decod(\qM)\) and on the nonlinear mapping relating the decoded states
-to the associated  integrands. It should be stressed that the goal of the regularization is not to smooth out these physical irregularities, but those produced by the active-set strategy used for ensuring positivity.  }).
-
-
-
-
+character and introduce only gradual local modifications.
 The smooth evolution described above may eventually be altered by the
 appearance of negative weights. In practice, this introduces localized irregularities, since solution algorithms    clamp these negative weights  to zero.   The second contribution in the objective function of
 Problem~\eqref{eq:quadraticGENERAL} is a graph-based, quadratic
@@ -2639,7 +2709,7 @@ becomes infeasible because the local rank condition fails.
 
 \begin{remark}
 \label{remark:positive}
- Numerical experiments indicate that most  of weight fields
+ Numerical experiments shown in Sections \ref{sec:infl_fw_ini} and \ref{sec:iniii} indicate that most  of weight fields
   are removed without activating the graph-coupled
 positivity-enforcement stage, which typically becomes necessary only
 during the final pruning steps, close to the final sparse solution. This favorable property may be explained by the presence of
@@ -2658,7 +2728,7 @@ increase on average over all configurations  in order to equilibrate the total s
 decreases, however, some cables may no longer be able to participate in
 the equilibrium rearrangement for certain loading configurations and
 simply go slack. In the present setting, this corresponds to weights
-attempting to become negative and therefore being clamped to zero (in Line~\ref{alg1:prune_active}).
+attempting to become negative and therefore being clamped to zero (in Line~\ref{alg1:prune_active} of Algorithm \ref{alg:prune_step_optionB}).
 \end{remark}
 
 
@@ -2666,50 +2736,17 @@ attempting to become negative and therefore being clamped to zero (in Line~\ref{
 
 
 
-
-\begin{remark}
-  The graph-regularized
-formulation couples all sampled latent states through the operator
-\(\KGs\); hence  the size of the stacked problem grows with
-\(|\Iact|\nM\). Consequently, although the proposed two-stage strategy
-avoids activating the graph-coupled redistribution during most pruning
-steps, the regularized stage (in particular the assembly and solution of the linear system in Line \ref{alg1:prune_reducedsolve}) may still become a significant
-computational bottleneck for large latent discretizations
-(\(\nM\) large).
-
-A natural way to alleviate this difficulty would be to exploit the fact
-that irregularities in the adaptive weight fields are mainly generated
-near active-set transition regions. Away from such regions, the
-least-change redistribution already tends naturally to evolve smoothly
-over the latent manifold. This suggests replacing the global graph
-coupling by more localized constructions, for instance based on latent
-partitions or clusters. Such extensions, however, have not been
-explored in the present work, since the examples considered here remain
-computationally manageable with the global graph operator.
 
 %
-% the regularized stage still constitutes a
-% significant computational bottleneck whenever positivity enforcement
-% becomes necessary. Indeed, the graph-regularized formulation couples
-% all sampled latent states through the operator \(\KGs\), so that the
-% size of the stacked problem grows with \( |\Iact|\nM \).
-%  For very large latent grids ($\nM$ large),  it may be unnecessarily expensive to solve
-% a fully coupled graph-regularized problem at every active-set update.
-
-
-
-\end{remark}
-
-
-
-\MATLAB{
-The graph-regularized positivity-enforcement stage is implemented in
-\href{/home/joaquin/Desktop/CURRENT_TASKS/MATLAB_CODES/FE_HROM/LARGE_STRAINS/NonLinearManifolds/GraphBased_MAW_ECM_2v.m}{GraphBased\_MAW\_ECM\_2v.m}.
-One tentative pruning step is carried out in
-\href{/home/joaquin/Desktop/CURRENT_TASKS/MATLAB_CODES/FE_HROM/LARGE_STRAINS/NonLinearManifolds/prune_step_optionB.m}{prune\_step\_optionB.m},
-whose main operations are summarized in
-Algorithm~\ref{alg:prune_step_optionB}.
-}
+%
+% \MATLAB{
+% The graph-regularized positivity-enforcement stage is implemented in
+% \href{/home/joaquin/Desktop/CURRENT_TASKS/MATLAB_CODES/FE_HROM/LARGE_STRAINS/NonLinearManifolds/GraphBased_MAW_ECM_2v.m}{GraphBased\_MAW\_ECM\_2v.m}.
+% One tentative pruning step is carried out in
+% \href{/home/joaquin/Desktop/CURRENT_TASKS/MATLAB_CODES/FE_HROM/LARGE_STRAINS/NonLinearManifolds/prune_step_optionB.m}{prune\_step\_optionB.m},
+% whose main operations are summarized in
+% Algorithm~\ref{alg:prune_step_optionB}.
+% }
 
 
 
@@ -3055,7 +3092,7 @@ decoder.
 %
 % \end{BOX}
 
-
+.
 \begin{BOX}
 \caption{Offline construction of a MAW--ECM rule.}
 \label{box:MAW_ECM_summary}
@@ -3070,7 +3107,7 @@ decoder.
 collect the independent displacement snapshots, together with the
 Gauss-point and history data required to reconstruct the internal-force
 and output integrands; see
-Sections~\ref{sec:FOM_kinematics}--\ref{sec:FOM_outputs} and
+Section~\ref{sec:FOM}  and
 Eq.~\eqref{eq:manifold_snapshot_matrix}.
 
 \item Construct the decoder \(\Decod\) and encoder \(\Encod\), identify
@@ -3241,9 +3278,7 @@ symmetric, so that no macroscopic rigid-body rotation is prescribed; thus:
 Nonzero entries in $\Umacro$ appear only for slave boundary nodes   and   corner
 nodes; such entries are determined by considering that,  for a node $\bm{X}=(X,Y)^T$, the   macroscopic contribution is defined   as $\bar{\bm{u}}(\bm{X})=\Gmacro \bm{X}$, which in the present
 case yields $\bar{\bm{u}}(\bm{X})=( \mu_1 X+ \mu_2 Y,\,
-\mu_2 X)^T$.
-
-Consistently with this interpretation, \(\dred \in \Rn{\nL}\)  in
+\mu_2 X)^T$.  Consistently with this interpretation, \(\dred \in \Rn{\nL}\)  in
 Eq.~\refeq{eq:dvecreconstruction} collects the degrees of freedom of
 the interior nodes and the independent boundary nodes on the
 designated master sides for imposing periodic conditions (here $\nL = 3018$). On the other hand, the lifting operator \(\Tlift\) in Eq.~\refeq{eq:dvecreconstruction} transfers the
@@ -3283,7 +3318,7 @@ $ \Gmacrox \in [-0.42,\,0.42]$, whereas the shear component is varied in
 $\Gmacroxy \in [-0.05,\,0.05]$. As illustrated in Fig.~\ref{fig:param_space}, the lower bound
 \((\Gmacrox)_{\textrm{min}}=-0.42\) corresponds to the most compressed configuration before self-contact occurs\footnote{Our model does not include any
 representation of self-contact; hence, extrapolation beyond this
-compression level would be physically meaningless.}.    Although these cells are primarily intended to operate under compression,
+compression level is physically meaningless.}.    Although these cells are primarily intended to operate under compression,
 the parameter domain is  kept symmetric, with
 \((\Gmacrox)_{\textrm{max}} = 0.42\). The purpose is to test the reduced model in
 a prediction regime in which input parameters of the same magnitude but
@@ -3293,7 +3328,7 @@ later, in Figure~\ref{fig:standard_HROM_stress}, the corresponding stress levels
 response under compression).
 \begin{figure}[!ht]
     \centering
-    \includegraphics[width=0.85\textwidth]{FIGS/param_space.png}
+    \includegraphics[width=0.8\textwidth]{FIGS/param_space.png}
     \caption{Training parameter domain and zig-zag trajectories used to
 generate the FE displacement snapshots. The corner configurations
 correspond to the extreme parameter values.}
@@ -3347,9 +3382,7 @@ set. The study revealed that this criterion requires \(\tolSVDd=10^{-6}\), yield
 \(\rROM=52\) modes, and  \(\tolSVD=10^{-4}\), which results in an
 ECM rule with \(1340\) Gauss points. For illustration,
 Fig.~\ref{fig:standard_HROM_results}(a) shows the \(671\) finite elements
-containing these points.
-
-The tight displacement truncation tolerance
+containing these points. The tight displacement truncation tolerance
 \(\tolSVDd=10^{-6}\) required to meet the accuracy criterion for the stresses reflects the previously mentioned
 markedly different scales of the tensile and compressive responses shown
 in Fig.~\ref{fig:standard_HROM_results}(b). Indeed, modes associated with small
@@ -3362,7 +3395,7 @@ branch.
     \begin{subfigure}[t]{0.2\textwidth}
         \centering
         \includegraphics[width=\textwidth]{FIGS/elems1.png}
-        \caption{Elements containing the selected Gauss points.}
+        \caption{Elements containing the selected Gauss points when using standard HROM.}
         \label{fig:standard_HROM_support}
     \end{subfigure}
     \hfill
@@ -3404,9 +3437,10 @@ of Eq.~\refeq{eq:decoder_master_slave}, introduced in
 Section~\ref{sec:fact}. We first address the identification of the
 latent coordinates. As established in Eq.~\refeq{eq:qMdefq}, these are
 obtained from the modal coefficients through
-\(\qM=\Tm\qrom\); the task here is therefore to determine the
-transformation matrix \(\Tm\) by exploiting the particular structure of
-the present benchmark.
+\(\qM=\Tm\qrom\); following the input-informed strategy discussed in
+Section~\ref{sec:inputinformed}, the task here is therefore to determine
+the transformation matrix \(\Tm\) by exploiting the particular
+parametrization of the present benchmark.
 
 
 The  problem under consideration is static (no inertial effects) and the material response is hyperelastic (no path dependence). It can be argued that, under such circumnstances,   the displacement
@@ -3476,13 +3510,13 @@ training states can be identified with the   input parameters:
 \begin{remark}
 \label{remark:noiterations}
 This identification has an important consequence for the online stage
-of the present benchmark. Because \(\qM\) is obtained directly from the
+of the present benchmark. Because \(\qM\) may be obtained directly from the
 prescribed input \(\muvec\), the reduced equilibrium equations
 \refeq{eq:MAW_ROM_equilibrium} need not be solved to determine the
 latent state. The decoder can instead be evaluated directly at
 \(\qM\approx\muvec\). Hyperreduction through the proposed adaptive
 cubature rule is therefore required only for evaluating the homogenized
-stresses (the equilibrium-residual integrands need not be included in
+stresses in Eq.~\refeq{eq:meta_homogenized_stress} (i.e., the equilibrium-residual integrands need not be included in
 the cubature training problem).
 \end{remark}
 
@@ -3495,32 +3529,35 @@ scaling matrix \(\Am\) follow from the SVD of
 Eq.~\refeq{eq:Am_definition}. The slave basis \(\PhiS\) is subsequently
 obtained from the orthogonality conditions in Eq.~\refeq{eq:orto}. For
 the present problem, this decomposition yields the $\rD = 2$ master modes whose deformed shapes are depicted in Figures \ref{fig:master_mode_1} and \ref{fig:master_mode_2}, and
-\(\rROM-\rD=50\) slave modes (the deformed shapes of some of these modes are in turn shown in Figures \ref{fig:slave_mode_1} to \ref{fig:slave_mode_4} ),  with
-\begin{equation}
-\label{eq:meta_Am}
-    \Am
-    =
-    10^{-1}
-    \begin{bmatrix}
-        -3.9962  &  0.21588\\
-        -0.34716 & -6.4264
-    \end{bmatrix}.
-\end{equation}
+\(\rROM-\rD=50\) slave modes (the deformed shapes of some of these modes are in turn shown in Figures \ref{fig:slave_mode_1} to \ref{fig:slave_mode_4} ).
+
+%
+% ,  with
+% \begin{equation}
+% \label{eq:meta_Am}
+%     \Am
+%     =
+%     10^{-1}
+%     \begin{bmatrix}
+%         -3.9962  &  0.21588\\
+%         -0.34716 & -6.4264
+%     \end{bmatrix}.
+% \end{equation}
 
 
 
 
-\begin{figure}[H]
+\begin{figure}[!ht]
     \centering
 
-    \begin{subfigure}{0.23\textwidth}
+    \begin{subfigure}{0.21\textwidth}
         \centering
         \includegraphics[width=\textwidth]{FIGS/m1m.png}
         \caption{Master mode \({\PhiM}_1\).}
                 \label{fig:master_mode_1}
     \end{subfigure}
     \hspace{0.05\textwidth}
-    \begin{subfigure}{0.23\textwidth}
+    \begin{subfigure}{0.21\textwidth}
         \centering
         \includegraphics[width=\textwidth]{FIGS/m2m.png}
         \caption{Master mode \({\PhiM}_2\).}
@@ -3529,25 +3566,25 @@ the present problem, this decomposition yields the $\rD = 2$ master modes whose 
 
     \vspace{0.5em}
 
-    \begin{subfigure}{0.23\textwidth}
+    \begin{subfigure}{0.21\textwidth}
         \centering
         \includegraphics[width=\textwidth]{FIGS/slv1.png}
         \caption{Slave mode \({\PhiS}_1\).}
           \label{fig:slave_mode_1}
     \end{subfigure}
-    \begin{subfigure}{0.23\textwidth}
+    \begin{subfigure}{0.21\textwidth}
         \centering
         \includegraphics[width=\textwidth]{FIGS/slv5.png}
         \caption{Slave mode \({\PhiS}_6\).}
          \label{fig:slave_mode_2}
     \end{subfigure}
-    \begin{subfigure}{0.23\textwidth}
+    \begin{subfigure}{0.21\textwidth}
         \centering
         \includegraphics[width=\textwidth]{FIGS/slv13.png}
         \caption{Slave mode \({\PhiS}_{13}\).}
         \label{fig:slave_mode_3}
     \end{subfigure}
-    \begin{subfigure}{0.2\textwidth}
+    \begin{subfigure}{0.18\textwidth}
         \centering
         \includegraphics[width=\textwidth]{FIGS/slv44.png}
         \caption{Slave mode \({\PhiS}_{44}\).}
@@ -3561,25 +3598,22 @@ the present problem, this decomposition yields the $\rD = 2$ master modes whose 
     \label{fig:master_slave_modes_manifold}
 \end{figure}
 
-   It remains to identify the nonlinear closure mapping the
+  It remains to identify the nonlinear closure mapping the
 \(\rD=2\) latent coordinates onto the
 \(\rROM-\rD=50\) slave coordinates,
-\(\qS\approx\Nslave(\qM)\). To this end, we employ anisotropic
+\(\qS\approx\Nslave(\qM)\), from the training pairs
+\((\qM,\qS)\) obtained from the displacement snapshots. To this end, we employ anisotropic
 Gaussian radial basis functions (RBFs) augmented with polynomial
 terms (quadratic). The regression coefficients are determined through
 standard-form Tikhonov-regularized least squares, using the identity
 regularization matrix ( see
-Refs.~\cite{poggio1990networks,wendland2005scattered}).
-
-Only a subset of the available snapshot pairs is retained as RBF
+Refs.~\cite{poggio1990networks,wendland2005scattered}). Only a subset of the available snapshot pairs is retained as RBF
 centers. A structured subsampling frequency of \([3,1]\) is used:
 every third sample is retained along the first latent direction
 (compression/extension), whereas all samples are retained along the
 second direction (shear). This results in \(1540\) centers out of $\nsnap =4851$ data points. The
 remaining states are employed to assess the accuracy of the closure away
-from the retained centers.
-
-The characteristic lengths of the anisotropic Gaussian kernels are set to
+from the retained centers. The characteristic lengths of the anisotropic Gaussian kernels are set to
 \(\ell_1=3.3013\cdot10^{-2}\) and
 \(\ell_2=1.5789\cdot10^{-2}\), and the Tikhonov regularization
 parameter  to \(\lambda_{\mathrm{RBF}}=10^{-10}\). With these
@@ -3589,11 +3623,10 @@ settings, the relative reconstruction error is
 
 Figure~\ref{fig:meta_slave_closure} shows the resulting mappings for
 four representative slave coordinates. The reconstructed surfaces are
-smooth and single-valued over the sampled latent domain, while the
-black markers indicate the retained RBF centers.
+smooth and single-valued over the sampled latent domain (the black markers indicate the retained RBF centers).
 
 
-\begin{figure}[H]
+\begin{figure}[!ht]
     \centering
 
     \begin{subfigure}{0.45\textwidth}
@@ -3641,7 +3674,7 @@ input, and no reduced equilibrium problem needs
 to be solved for the evaluation of the homogenized response. We
 therefore adopt the output-only case described after
 Eq.~\refeq{eq:approxGEN} in Section~\ref{sec:fixedweight_cubature}  and construct the cubature rule exclusively
-for the homogenized stress in Eq.~\refeq{eq:meta_homogenized_stress}, that is:  $\rGENg{g}= {\PKone_g}/{|\Omega_0|}$ ($g=1,2 \ldots \ngp$), which implies that there are  $\ncond = 1+ \nstress = 5$ integration conditions per state. The same \(\nM=1540\) retained latent states used for the RBF closure described previously in Section \ref{sec:nonlinearclosure} are employed to assemble the output-integrand matrix $\Agen$ defined in Eq.~\ref{eq:AgenDEF}; hence\footnote{This matrix is markedly smaller than its standard-HROM
+for the homogenized stress in Eq.~\refeq{eq:meta_homogenized_stress}, that is:  $\rGENg{g}= {\PKone_g}/{|\Omega_0|}$ ($g=1,2 \ldots \ngp$), which implies that there are  $\ncond = \nstress = 4$ integration conditions per state. The same \(\nM=1540\) retained latent states used for the RBF closure described previously in Section \ref{sec:nonlinearclosure} are employed to assemble the output-integrand matrix $\Agen$ defined in Eq.~\ref{eq:AgenDEF}; hence\footnote{This matrix is markedly smaller than its standard-HROM
 counterpart, which contains
 \((\rROM+\nOUT)\nsnap=271656\) columns; see
 Footnote~\ref{footnote:size} in
@@ -3702,9 +3735,7 @@ accuracy--compression trade-off is nevertheless strongly favorable: the number o
 independent coordinates decreases from \(\rROM = 52\) to \(\rD=2\), and the
 number of integration points from \(1340\) to \(\mInit = 54\). Interestingly,
 the corresponding compression ratios are almost identical, namely
-\(26\) and approximately \(25\), respectively. Moreover, the direct
-identification of the master coordinates with the input eliminates the
-reduced nonlinear equilibrium solve.
+\(26\) and approximately \(25\), respectively.
 
 
 \subsection{Manifold-adaptive weight ECM }
@@ -3728,10 +3759,8 @@ In the present output-only setting, the state-dependent integrands are
 the $\nstress =4$ components of the   PK1 stress entering the
 homogenized response. At each retained latent state, these four
 integration conditions are supplemented with the invariant volume
-constraint. The local systems in
-Eq.~\refeq{eq:constraintsLOCAL} therefore contain $\ncond = \nstress + 1$ independent
-conditions, which also establishes a lower bound of $\mLower = \ncond = 5$ points for any
-positive adaptive rule.
+constraint. This gives    a lower bound of $\mLower = 4+1 = 5$ points (see Eq.~\ref{eq:ncondmin}) for the desired
+  adaptive rule .
 
 The same \(\nM=1540\) states retained as RBF centers for the decoder are used as the
 nodes of the latent graph \(\Glat\). Here, the numerical identification
@@ -3755,19 +3784,14 @@ fixed-weight initialization. The regularity of the resulting adaptive
 weight fields, their regression over the latent domain, and the
 associated online accuracy are examined subsequently.
 
-Four initial cubature rules are considered, obtained with
-\[
-\tolSVDfixed\in
-\left\{10^{-4},10^{-5},10^{-6},10^{-7}\right\}
-\]
+Four initial cubature rules are considered, obtained with $\tolSVDfixed\in
+\left\{10^{-4},10^{-5},10^{-6},10^{-7}\right\}$
 in the truncation of the training integrand matrix \(\Agen\). The case
 \(\tolSVDfixed=10^{-4}\) is precisely the \(\mInit=54\)-point rule
 assessed in Table~\ref{tab:online_fixed_manifold}. The other three rules
 are introduced here solely to determine whether the final adaptive
-support and the pruning efficiency depend materially on the size and
-accuracy of the fixed-weight initialization.
-
-The graph-regularization parameter and the number of candidate trials
+support and the pruning efficiency depend   on the size and
+accuracy of the fixed-weight initialization.  The graph-regularization parameter and the number of candidate trials
 are held fixed throughout the study at
 \(\alphaG=10^4\), appearing in
 Algorithm~\ref{alg:prune_step_optionB}, and
@@ -3883,7 +3907,7 @@ Figure~\ref{fig:ecm54_vs_maw10} compares the initial fixed-weight rule   with th
 \begin{figure}[!ht]
 \centering
 \includegraphics[width=\textwidth]{FIGS/weights_alpha1e4_RBF.png}
-\caption{RBF reconstruction of the ten adaptive weight fields $\omegag{g}=\omegag{g}(\qM)$, $g=1,\ldots,\nomega$. Black dots denote the sampled manifold states used by the adaptive cubature procedure. The spatial location of the integration point associated with each weight field is shown in Fig.~\ref{fig:ecm10b}.}
+\caption{RBF reconstruction of the $\nomega = 10$ adaptive weight fields $\omegag{g}=\omegag{g}(\qM)$, $g=1,\ldots,\nomega$ (normalized by the volume $|\Omega_0|$). Black dots denote the sampled manifold states used by the adaptive cubature procedure. The spatial location of the integration point associated with each weight field is shown in Fig.~\ref{fig:ecm10b}.}
 \label{fig:weights_alpha1e4_rbf}
 \end{figure}
 
@@ -3896,7 +3920,7 @@ The first weight field, $\omegag{1}$  remains nearly constant throughout the lat
 \includegraphics[width=0.24\textwidth]{FIGS/d25.png}}
 \hfill
 \subfloat[$\eta = 0.5 $]{
-\includegraphics[width=0.23\textwidth]{FIGS/d50n.png}}
+\includegraphics[width=0.21\textwidth]{FIGS/d50n.png}}
 \hfill
 \subfloat[$\eta = 0.75 $]{
 \includegraphics[width=0.21\textwidth]{FIGS/d75.png}}
@@ -3936,7 +3960,7 @@ Let us now qualitatively examine the effect of the graph regularization paramete
 \end{figure}
 
 
-\begin{table}[H]
+\begin{table}[!ht]
 \centering
 \caption{Influence of graph regularization on the accuracy of the adaptive cubature rule. Errors correspond to averages over the two training trajectories.}
 \label{tab:MAW_ECM_accuracy}
@@ -4022,7 +4046,7 @@ Although the employed damage model
 is classical, see e.g. Ref.
 \cite{simo1987strain}, it is convenient to briefly recall their main
 features, since they will later motivate several aspects of the
-proposed  manifold HROM. In an isotropic damage model, the constitutive response at each Gauss point is driven by a single scalar
+proposed input-informed decoder. In an isotropic damage model, the constitutive response at each Gauss point is driven by a single scalar
 internal variable, \(\rDAMAGE\), whose evolution equation can be
 integrated explicitly as follows:
 \begin{equation}
@@ -4041,7 +4065,7 @@ and the elasticity matrix, respectively.   The    damage variable  $\damage\in [
 $ \dot{\qDAMAGE}
 =
 \hardeningD\,\dot{\rDAMAGE}$,
- \(\hardeningD\) being the hardening modulus.   The corresponding stress
+ \(\hardeningD >0\) being the hardening modulus.   The corresponding stress
 vector is finally obtained as
 \begin{equation}
 \label{eq:damage_stress}
@@ -4080,8 +4104,7 @@ threshold \(\strengthD=70\,\mathrm{MPa}\), and hardening parameter
 Concerning training and generalization, we adopt a deliberately
 parsimonious strategy: the  reduced-order models
 considered in this work---namely the standard HROM, the manifold HROM,
-and the proposed manifold HROM equipped with adaptive-weight
-cubature---are trained exclusively on a monotonic tensile loading path
+and the proposed manifold HROM equipped with adaptive weights---are trained exclusively on a monotonic tensile loading path
 (Figure~\ref{fig:damage_problem}(b)). No unloading, reloading, or
 load-reversal information is supplied as data\footnote{ By stating that no unloading,
 reloading, or load-reversal information is supplied as data, we mean
@@ -4145,7 +4168,7 @@ The component \(\dredLIN\) represents the projection of the solution
 onto the undamaged subspace, whereas \(\dredNON\) contains the
 remaining information associated with damage. Separate reduced bases are then constructed for each contribution. This
 requires distinguishing between the undamaged and damaged portions of
-the response. Accordingly, the displacement snapshots are partitioned
+the training response. Accordingly, the displacement snapshots are partitioned
 into two submatrices:
 \begin{equation}
 \label{eq:dsnapDECOMPOSITION}
@@ -4210,14 +4233,14 @@ By way of illustration, we show in Figure~\ref{fig:damage_modes}  the linear mod
 
 We next construct the standard fixed-weight ECM rule following
 Sections~\ref{sec:fixedweight_cubature}
-and~\ref{sec:fixed_weight_cubature}. The only quantity entering the cubature training matrix are the projected internal-force densities; the size of this matrix in this case is thus $\ngp \times \rROM \nsnap$, where $\ngp = 2450\cdot9=22050$ and $\rROM \nsnap = 16\cdot 1000 = 16000$.
+and~\ref{sec:fixed_weight_cubature}. The only quantity entering the cubature training matrix are the projected internal-force densities; the size of this matrix in this case is thus $\ngp \cdot \rROM \nsnap$, where $\ngp = 2450\cdot9=22050$ and $\rROM \nsnap = 16\cdot 1000 = 16000$.
 Using the SRSVD with \(\tolSVD=10^{-5}\), we get \(2369\)
 left singular vectors. Augmenting this basis with the volume constraint
 in Eq.~\refeq{eq:ECM_volume_constraint}, the ECM selects \(2370\)
 Gauss points distributed over \(1140\) finite elements; see
 Fig.~\ref{fig:damage_hrom_std}(b).
 
- Despite the apparent simplicity of the problem ---driven by a single
+ Despite the apparent simplicity of the problem ---driven by the history of a single
 input parameter---, the resulting reduction in terms of number of
 integration points is rather low (from $\ngp = 22050$ to 2370, around $10.7\%$). The explanation behind this poor reduction may lie in the fact that the growth of damage produces
 an evolving nonlinear region whose spatial support changes throughout
@@ -4270,7 +4293,7 @@ capture the subsequent unloading and reloading behavior,  including the (unseen)
  \begin{figure}[htbp]
 \centering
 \includegraphics[width=\textwidth]{FIGS/cycle.png}
-\caption{Generalization test under cyclic loading. (a) Average stress--strain response obtained during the loading cycle. The labels indicate the successive stages of the loading history: primary tensile loading (0--2), unloading from the tensile state (2--3), reverse loading into compression (3--4), and unloading from the compressive state (4--0).   (b) Evolution of the amplitudes  corresponding to  the first three modes $\PhiROM_1 = \PhiROMlin, \PhiROM_2$ and $\PhiROM_3$. }
+\caption{Generalization test under cyclic loading.(a) Average stress--strain response obtained during the loading cycle.  Comparison between FE and standard HROM. The labels indicate the successive stages of the loading history: primary tensile loading (0--2), unloading from the tensile state (2--3), reverse loading into compression (3--4), and unloading from the compressive state (4--0).   (b) Evolution of the amplitudes  corresponding to  the first three modes $\PhiROM_1 = \PhiROMlin, \PhiROM_2$ and $\PhiROM_3$. }
 \label{fig:damage_cycle}
 \end{figure}
 
@@ -4284,19 +4307,35 @@ capture the subsequent unloading and reloading behavior,  including the (unseen)
 %  \input{IdentLV_3}
 
 
+% \subsubsection{Identification of latent variables}
+% \label{sec:id2}
+%  Let us move now  the manifold HROM. We begin with the construction of
+% the decoder, for which we adopt the same master--slave structure
+% introduced in Eq.~\ref{eq:decoder_master_slave}, but adapted to the
+% linear/nonlinear decomposition of Eq.~\ref{eq:decomNON}. The latent
+% coordinate \(\qMlin\) and the corresponding basis matrix
+% \(\PhiROMlin\) for the linear component \(\dredLIN\) have already been
+% identified. It remains to determine how many additional latent
+% coordinates are required to represent the nonlinear component
+% \(\dredNON\), how to identify them from the training data, and,
+% finally, how to construct the map from the resulting master
+% coordinates to the slave coordinates,
+% \(\qS=\Nslave(\qM)\).
+
 \subsubsection{Identification of latent variables}
 \label{sec:id2}
- Let us move now  the manifold HROM. We begin with the construction of
-the decoder, for which we adopt the same master--slave structure
-introduced in Eq.~\ref{eq:decoder_master_slave}, but adapted to the
-linear/nonlinear decomposition of Eq.~\ref{eq:decomNON}. The latent
-coordinate \(\qMlin\) and the corresponding basis matrix
-\(\PhiROMlin\) for the linear component \(\dredLIN\) have already been
-identified. It remains to determine how many additional latent
-coordinates are required to represent the nonlinear component
-\(\dredNON\), how to identify them from the training data, and,
-finally, how to construct the map from the resulting master
-coordinates to the slave coordinates,
+
+We now turn to the manifold HROM. We begin with the construction of the input-informed
+decoder ( as discussed in
+Section~\ref{sec:inputinformed}), for which we adopt the same master--slave structure introduced
+in Eq.~\ref{eq:decoder_master_slave}, but adapted to the linear/nonlinear
+decomposition of Eq.~\ref{eq:decomNON}. The latent coordinate
+\(\qMlin\) and the corresponding basis matrix \(\PhiROMlin\) for the
+linear component \(\dredLIN\) have already been identified. It remains to determine how many
+additional latent coordinates are required to represent the nonlinear
+component \(\dredNON\), how to identify them by exploiting the available
+loading information, and, finally, how to construct the map from the
+resulting master coordinates to the slave coordinates,
 \(\qS=\Nslave(\qM)\).
 
 The constitutive response at each Gauss point is governed by a single
@@ -4819,7 +4858,7 @@ that state.
 
 
 \subsubsection{Influence of the fixed-weight initialization and pruning efficiency}
-
+\label{sec:iniii}
 We now proceed with the  assessment of the efficiency  of
 the pruning process of
 Algorithm~\ref{alg:MAW_global_pruning} for different initializations, namely three initial cubature
@@ -4900,33 +4939,6 @@ iterations before reaching the final rule. Such behavior was not
 observed in the metamaterial benchmark, where the first activation of
 the positivity-enforcement stage invariably led to a permanent
 transition to the regularized regime.
-
-
-By way of illustration, Figure~\ref{fig:damage3cases} displays, in
-the top row, the finite elements containing the integration points of
-the initial fixed-weight rules considered in
-Table~\ref{tab:maw_pruning_summary_damage};  the lower row, on the other hand, shows the
-location of the integration points of the final sparsest rule,  superposed on the contour
-plot of the  damage field  predicted by the FE model at the final step of the training trajectory.
-It is interesting to note that the spatial distribution of the retained points exhibits, in all three
-cases, a remarkably similar pattern: one point is invariably located
-in the undamaged region (point \(1\) in
-Fig.~\ref{fig:damage3cases}(b)); three or four points are placed in the vicinity of
-the hole boundary, where damage nucleates and the stress
-concentration is highest (points \(3\), \(4\), \(6\), and \(7\) in
-Fig.~\ref{fig:damage3cases}(b)); and the other two or three points are located within the damaged region,
-but away from the hole.
-%
-% This recurrent pattern   evidences
-% that the pruning procedure does not select integration points arbitrarily, but    points that are physically relevant for capturing the
-%
-% does   select integration points arbitrarily, but rather it
-%
-%
-% appears to identify, from the information contained in the internal-force density matrix, the regions of the domain carrying the most relevant information.
-
-
-
 \begin{figure}[t]
 \centering
 \includegraphics[width=0.9\textwidth]{FIGS/damage3cases2.png}
@@ -4942,6 +4954,30 @@ initializations \(\mInit=97\), \(\mInit=277\), and \(\mInit=534\),
 respectively. The labels in panel (b) identify the seven retained
 points used in the subsequent analysis.}
 \label{fig:damage3cases}
+\end{figure}
+
+By way of illustration, Figure~\ref{fig:damage3cases} displays, in
+the top row, the finite elements containing the integration points of
+the initial fixed-weight rules considered in
+Table~\ref{tab:maw_pruning_summary_damage};  the lower row, on the other hand, shows the
+location of the integration points of the final sparsest rule,  superposed on the contour
+plot of the  damage field  predicted by the FE model at the final step of the training trajectory.
+It is interesting to note that the spatial distribution of the retained points exhibits, in all three
+cases, a remarkably similar pattern: one point is invariably located
+in the undamaged region (point \(1\) in
+Fig.~\ref{fig:damage3cases}(b)); three or four points are placed in the vicinity of
+the hole boundary, where damage nucleates and the stress
+concentration is highest (points \(3\), \(4\), \(6\), and \(7\) in
+Fig.~\ref{fig:damage3cases}(b)); and the other two or three points are located within the damaged region,
+but away from the hole.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.65\textwidth]{FIGS/adaptive_weigths_1em5.pdf}
+\caption{Sampled adaptive weights obtained from the pruning algorithm
+for the damage benchmark with \(\mInit=277\).  The insets show the retained supports and the
+labels used to identify the individual weight samples.  (a) Graph-regularized pruning procedure.  (b) Pruning without regularization. }
+\label{fig:damage_weights_samples}
 \end{figure}
 
 On the other hand, Figure~\ref{fig:damage_weights_samples}(a) displays the sampled
@@ -5002,14 +5038,6 @@ amenable to subsequent regression.
 % contribution of the damage-affected zone.
 
 
-\begin{figure}[t]
-\centering
-\includegraphics[width=0.8\textwidth]{FIGS/adaptive_weigths_1em5.pdf}
-\caption{Sampled adaptive weights obtained from the pruning algorithm
-for the damage benchmark with \(\mInit=277\).  The insets show the retained supports and the
-labels used to identify the individual weight samples.  (a) Graph-regularized pruning procedure.  (b) Pruning without regularization. }
-\label{fig:damage_weights_samples}
-\end{figure}
 
 
 The adaptive nature of the proposed cubature rules can be appreciated
@@ -5075,7 +5103,7 @@ select a denser, yet smoother, rule instead.
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=1\textwidth]{FIGS/4fig.png}
+\includegraphics[width=0.8\textwidth]{FIGS/4fig.png}
 \caption{Adaptive weights as a function of the normalized, nonlinear latent coordinate $\qMnonrel$, corresponding to four feasible
 cubature rules extracted from different stages of the pruning process (containing
 \(\nomega=14\), \(12\), \(10\), and \(8\) integration points).  The insets show the
@@ -5135,6 +5163,32 @@ Section~\ref{sec:fixedECM2} (see Table~\ref{tab:damage_maw_accuracy}) is retaine
 comparison isolates the effect of replacing the fixed cubature rule by
 the adaptive one.
 
+
+\begin{figure}[t]
+\centering
+\subfloat[Evolution of the latent coordinates.]{
+\includegraphics[width=0.4\textwidth]
+{FIGS/last.png}
+\label{fig:damage_maw_latent}
+}
+\hfill
+\subfloat[Average axial stress--strain response.]{
+\includegraphics[width=0.35\textwidth]
+{FIGS/last2.png}
+\label{fig:damage_maw_stress_strain}
+}
+\caption{Online response of the manifold HROM with the adaptive rule of
+\(\nomega=7\) integration points along the generalization trajectory of
+Fig.~\ref{fig:damage_problem}(c).
+(a) Evolution of \(\qMlin\) and \(\qMnonrel\), compared with the
+coordinates obtained by applying the encoder in
+Eq.~\refeq{eq:encoder_explicit} to the FE solutions (see Fig.~\ref{fig:damage_mhrom_fixed_ecm}(b) for the analogous
+fixed-weight comparison).
+(b) Average axial stress--strain response predicted by the FE and
+manifold-HROM models (the same comparison carried out
+in Fig.~\ref{fig:damage_cycle}(a) for the standard HROM).}
+\label{fig:damage_maw_global}
+\end{figure}
 For online evaluation, the sampled adaptive weights
 \(\omegag{g}=\omegag{g}(\qMnonrel)\) are represented using the same
 spline framework employed for the decoder in
@@ -5190,6 +5244,16 @@ variations observed in the training and test errors are negligible
 relative to the approximation error already introduced by the decoder.
 
 
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.7\textwidth]{FIGS/stress_vm.png}
+\caption{Evolution of the von Mises equivalent stress  during the generalization test at the seven
+Gauss points selected by MAW--ECM.
+   The inset identifies the
+location and numbering of the selected points.}
+\label{fig:damage_maw_local_stresses}
+\end{figure}
+
 
 A more detailed assessment is provided in
 Figure~\ref{fig:damage_maw_global}, which compares the latent
@@ -5217,42 +5281,6 @@ cycle---including primary loading, unloading, reverse loading in
 compression, and final unloading---is reproduced with no visible
 discrepancy.
 
-\begin{figure}[t]
-\centering
-\subfloat[Evolution of the latent coordinates.]{
-\includegraphics[width=0.5\textwidth]
-{FIGS/last.png}
-\label{fig:damage_maw_latent}
-}
-\hfill
-\subfloat[Average axial stress--strain response.]{
-\includegraphics[width=0.40\textwidth]
-{FIGS/last2.png}
-\label{fig:damage_maw_stress_strain}
-}
-\caption{Online response of the manifold HROM with the adaptive rule of
-\(\nomega=7\) integration points along the generalization trajectory of
-Fig.~\ref{fig:damage_problem}(c).
-(a) Evolution of \(\qMlin\) and \(\qMnonrel\), compared with the
-coordinates obtained by applying the encoder in
-Eq.~\refeq{eq:encoder_explicit} to the FE solutions (see Fig.~\ref{fig:damage_mhrom_fixed_ecm}(b) for the analogous
-fixed-weight comparison).
-(b) Average axial stress--strain response predicted by the FE and
-manifold-HROM models (the same comparison carried out
-in Fig.~\ref{fig:damage_cycle}(a) for the standard HROM).}
-\label{fig:damage_maw_global}
-\end{figure}
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=0.8\textwidth]{FIGS/stress_vm.png}
-\caption{Evolution of the von Mises equivalent stress  during the generalization test at the seven
-Gauss points selected by MAW--ECM.
-   The inset identifies the
-location and numbering of the selected points.}
-\label{fig:damage_maw_local_stresses}
-\end{figure}
-
 
  Finally, Figure~\ref{fig:damage_maw_local_stresses} compares the von
 Mises stress histories predicted by the FE model and the adaptive
@@ -5274,124 +5302,101 @@ at plotting resolution.
 
 
 \section{Concluding remarks}
-\PROMPT{\input{Prompt_conclusions}}
-%\input{Conclusions_1}
-%\input{Conclusions_2}
+% %\input{Conclusions_1}
+% %\input{Conclusions_2}
+% \PROMPT{\input{Prompt_conclusions3}}
+%
+% %\input{Conclusions_3}
+% \input{Conclusions_4}
 
-This work has explored the use of state-dependent integration weights
-for the hyperreduction of nonlinear-manifold reduced-order models.
-The underlying idea is admittedly simple, but constitutes a significant
-departure from the usual ECM/ECSW paradigm: the spatial support of the
-cubature rule is kept fixed, while its positive weights are allowed to
-vary with the position on the solution manifold. The resulting
-MAW--ECM formulation, introduced in Section~\ref{sec:MAWECM}, may thus
-be regarded as an attempt to make the integration rule conform to the
-same low-dimensional structure exploited by the nonlinear kinematic
-representation.
 
-The numerical evidence obtained from the two benchmarks supports this
-idea. A fixed-weight ECM rule is constructed from a global linear
-approximation of the sampled integrands and must therefore accommodate
-their complete retained linear span. MAW--ECM, by contrast, imposes
-integration conditions locally at the sampled manifold states. In this
-sense, it seeks to integrate the family of integrands actually visited
-by the reduced model, rather than the larger linear space generated by
-them. This distinction appears to be the main reason behind the
-additional sparsity obtained with adaptive weights.
 
-In the hyperelastic metamaterial of
-Section~\ref{sec:metamaterial}, the nonlinear manifold already provides
-a substantial reduction, both in kinematic dimension and in the size of
-the corresponding fixed cubature rule. Starting from the latter,
-MAW--ECM removes approximately \(80\%\) of the remaining integration
-points, while preserving essentially the same level of displacement
-accuracy and maintaining a small error in the homogenized stresses.
-The results also confirm the role of graph regularization: smoothness
-of the sampled weight fields is not merely an aesthetic requirement,
-but has a direct influence on the quality of their subsequent
-regression and, consequently, on the online response.
 
-The effect is considerably stronger in the continuum-damage problem of
-Section~\ref{sec:DamageProblem}. There, MAW--ECM eliminates more than
-\(97\%\) of the points of the fixed-weight manifold rule, leaving only
-a very small common support. This suggests that adaptive weights may be
-particularly advantageous in propagation-dominated problems. Damage
-produces an evolving localized nonlinear region, and a fixed cubature
-rule must retain enough spatial information to represent its different
-positions throughout the loading history. Adaptive weights can instead
-redistribute the relative importance of a much smaller set of retained
-points as the nonlinear region evolves. In this sense, the pruning
-procedure appears to identify automatically the regions carrying the
-most relevant mechanical information, leaving a sparse set of
-integration points that may be viewed, metaphorically, as structural
-``sensors''.
+The central premise examined in this work is that the conventional use
+of fixed weights in sampling-and-weighting hyperreduction becomes
+unnecessarily restrictive once the state is represented on a nonlinear
+manifold. The two benchmarks of Sections~\ref{sec:metamaterial} and
+\ref{sec:DamageProblem} support this premise. In both cases, replacing
+the linear ROM by a nonlinear-manifold representation reduces the
+number of integration points by a factor remarkably close to the
+reduction in the number of independent state coordinates. In the
+metamaterial problem, the latter decreases from \(52\) to \(2\), a
+factor of \(26\), while the corresponding fixed cubature rule decreases
+from \(1340\) to \(54\) Gauss points, a factor of approximately \(25\).
+In the damage problem, the analogous factors are \(8\) and approximately
+\(8.6\), respectively.
+Allowing these weights to adapt to the latent state then provides a
+further substantial reduction: MAW--ECM eliminates approximately
+\(80\%\) of the remaining points in the metamaterial benchmark, while
+in the damage problem the reduction exceeds \(97\%\), from \(277\)
+points to only \(7\)--\(8\), with essentially no loss of accuracy
+relative to the corresponding fixed-weight manifold HROM.
 
-The damage benchmark also provides a demanding generalization test.
-The reduced models were trained exclusively on a monotonic tensile
-trajectory, whereas the testing history includes unloading, reverse
-loading in compression, and final unloading. Nevertheless, the
-adaptive manifold HROM reproduces not only the global displacement and
-stress--strain response, but also the local stress histories at the
-retained integration points. This agreement is particularly noteworthy
-because these local histories are not prescribed by the cubature
-construction itself; rather, they emerge from the solution of the
-hyperreduced equilibrium equations together with the constitutive
-updates performed at the selected points.
 
-A second conclusion concerns the construction of the nonlinear
-manifolds. In the two examples considered here, maximum kinematic
-compression was sought by allowing the latent coordinates to be general
-linear combinations of the retained modal amplitudes. The particular
-identification procedures were purposely tailored to each benchmark.
-For the metamaterial, the geometry of the sampled solution manifold was
-sufficient to identify an appropriate two-dimensional parametrization.
-For the history-dependent problem, by contrast, physical knowledge of
-the constitutive response proved essential: exploiting the invariance
-associated with elastic unloading made it possible to separate the
-reversible dependence on load amplitude from the irreversible evolution
-of damage and reduce the nonlinear closure to a univariate regression.
-Interestingly, the resulting nonlinear latent coordinate subsequently
-acquired the interpretation of a structural-scale counterpart of the
-local damage-history variable.
 
-These examples therefore illustrate complementary roles for data and
-physical insight in manifold construction. The procedures adopted here
-are admittedly problem-dependent and are not presented as a general
-solution to manifold learning. Nevertheless, in the absence of robust
-general-purpose methodologies for strongly history-dependent problems,
-the incorporation of elementary mechanical information may considerably
-reduce both the dimension of the learning problem and the amount of
-training data required. By contrast, once a manifold representation has
-been supplied, the MAW--ECM pruning procedure itself is essentially
-automatic.
+Of particular relevance is the weak dependence of these final
+cardinalities on the fixed ECM rule used for initialization.  Initial supports
+varying from \(54\) to \(187\) points in the first benchmark, and from
+\(97\) to \(534\) points in the second, ultimately collapse to
+approximately the same number of retained points. Moreover, the final
+rules lie only a few points above the lower bounds imposed by the local
+integration conditions. These observations suggest that, once the
+weights are allowed to adapt, the required support is controlled
+primarily by the dimension of the local constraint space---which in the
+present examples is itself tied to the intrinsic dimension of the
+solution manifold---rather than by the dimension of the global span of
+all sampled integrands. This is perhaps the most significant practical
+consequence of replacing global fixed weights by manifold-adaptive ones.
 
-The present study should be regarded as exploratory. Both benchmarks
-involve at most two latent coordinates, and extending the methodology
-to substantially higher-dimensional manifolds remains an important
-open question. Of particular concern is the graph-regularized
-redistribution introduced in Section~\ref{sec:MAWECM}, whose global
-coupling may become prohibitively expensive as the number of sampled
-latent states increases. The numerical experiments are encouraging in
-that regularization is required only during a relatively small fraction
-of the pruning process, but more scalable alternatives---possibly based
-on local graphs, partitions, or clusters of the latent space---should
-be investigated.
 
-Finally, extrapolation of the adaptive weight fields deserves specific
-attention. Positivity is enforced at the sampled latent states, but is
-not automatically guaranteed by a generic regression outside the
-training domain. Constraint-preserving regressions constitute one
-possible route. Another, particularly simple possibility would be to
-enrich the regression dataset outside the high-fidelity training region
-using inexpensive low-fidelity predictions provided by a fixed-weight
-manifold HROM. These issues, together with the extension to
-higher-dimensional latent spaces and more complex constitutive models,
-define the natural next steps for assessing how far the proposed
-adaptive-weight paradigm can be carried.
+
+
+Adaptivity, however, is useful only if the resulting weight fields can
+be represented reliably online. The numerical experiments confirm the
+role played by the proposed graph regularization: without it, the sampled weights develop local
+irregularities that substantially deteriorate the accuracy of their
+regression.  On the other hand, the idea of  performing
+the redistribution locally whenever positivity is preserved and
+activates the graph-coupled stage only when positivity enforcement
+has proved successful:  the experiments show that most points can be removed
+in this inexpensive regime. In the metamaterial benchmark, for example,
+this strategy reduces pruning times    from more than two hours
+to less than one minute in one of the studied cases.
+
+
+The present study is nevertheless exploratory in several respects.
+Both examples involve only two independent latent coordinates. Extension
+to substantially higher-dimensional parameter and latent spaces will
+require revisiting the globally coupled graph operations entering the
+regularized redistribution. Local graph constructions, partitions, or
+clusters of the latent domain appear natural alternatives. Similarly,
+the graph-based identification used for the history coordinate in
+the damage problem has here been demonstrated only for an ordered
+one-dimensional damage trajectory; its extension to genuinely
+multidimensional loading histories remains to be investigated.
+
+A second issue concerns the continuous representation of the adaptive
+weights after pruning. Positivity and the invariant integration conditions are enforced at the
+sampled latent states, but generic regression and extrapolation do not
+preserve these properties automatically. Constraint-preserving
+regression of the weight fields, including their extrapolation outside
+the training domain, is therefore an immediate subject for further
+work. The consistent linearization derived in
+\ref{app:MAW_linearization} also contains an additional tangent
+contribution arising from the derivatives of the adaptive weights.
+Although no convergence difficulties were encountered in the numerical
+experiments reported here, the implications of this term for  robustness deserve a more
+systematic investigation. Finally, extensions to dynamics and to the
+other settings  will require corresponding
+invariant constraints to be identified with care. In particular, if adaptive cubature is applied to inertial terms,
+preservation of the appropriate mass, first-moment, and inertia
+properties should be examined so that state-dependent reweighting does
+not introduce spurious inertial effects.
+
 
 \section*{Acknowledgements}
 
-Joaquín A. Hernández and S. Ares de Parga acknowledge  the support of Grant PID2024-158878OB-C21 funded by MICIU/AEI /10.13039/501100011033 and by ERDF/EU.
+Joaquín A. Hernández and Sebastian Ares de Parga acknowledge  the support of Grant PID2024-158878OB-C21 funded by MICIU/AEI /10.13039/501100011033 and by ERDF/EU.
 
 
 \appendix
@@ -5559,6 +5564,6 @@ affine (that is, when $\JTAU = \ident$).
 
 
  \bibliographystyle{plain}
-\bibliography{Bibliography}
+\bibliography{Bibliography_used}
 
 \end{document}
