@@ -3092,7 +3092,6 @@ decoder.
 %
 % \end{BOX}
 
-.
 \begin{BOX}
 \caption{Offline construction of a MAW--ECM rule.}
 \label{box:MAW_ECM_summary}
@@ -3158,11 +3157,12 @@ returns the retained support
 \(\Wad\in\mathbb{R}^{|\Zomega|\times\nM}\) containing the sampled
 adaptive weights; see Section~\ref{sec:globalpruning}.
 
-\item Regress each row of \(\Wad\) over the sampled latent states to
-construct the continuous weight fields
+\item For each retained Gauss point \(g_i\in\Zomega\), regress the
+\(i\)-th row of \(\Wad\) over the sampled latent states to construct
+the continuous weight field
 \[
-\qM\mapsto\omegag{g}(\qM),
-\qquad g\in\Zomega,
+\qM\mapsto\omegag{g_i}(\qM),
+\qquad i=1,\ldots,\nomega,
 \]
 from the data pairs in Eq.~\eqref{eq:pairs}; see
 Section~\ref{sec:regression}. The resulting online cubature rule has a
