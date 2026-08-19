@@ -879,7 +879,7 @@ The decoder is constructed offline from displacement snapshots associated
 with a representative training set
 \begin{equation}
 \label{eq:pmutrain}
-  \PmuTRAIN = \{\muvec_i\}_{i=1}^{\nsnap}\subset\Pmu
+  \PmuTRAIN = \{\muvec_i\}_{i=1}^{\nsnap}\subset\Pmu.
 \end{equation}
 We collect these snapshots in
 the matrix
@@ -907,7 +907,7 @@ this representation, the decoder is expressed in the factorized form
 where  \(\PhiROM\in\RRn{\nL}{\rROM}\)  is    an orthonormal basis matrix for a
 low-rank approximation of the column space of \(\Dsnap\), and  \(\TAU:\Rn{\rD}\rightarrow\Rn{\rROM}\) maps the latent
 coordinates to the coefficients in this linear basis.
-As customary, the number of modes $\rROM$ in $\PhiROM$ is controlled by a relative tolerance $\tolSVD \in [0,1[$ such that
+As customary, the number of modes $\rROM$ in $\PhiROM$ is controlled by a relative tolerance $\tolSVDd \in [0,1)$ such that
 \begin{equation}
 \label{eq:PhiROM_truncation}
 \frac{
@@ -942,7 +942,7 @@ linear combinations of  \(\qrom\):
 \end{equation}
 The problem of selecting the latent coordinates is thus recast as that
 of determining
-\(\Tm\in\RRn{\rD}{\rROM}\). References ~\cite{barnett2022quadratic,
+\(\Tm\in\RRn{\rD}{\rROM}\). We assume that \(\Tm\) has full row rank \(\rD\), so that the latent coordinates are linearly independent. References ~\cite{barnett2022quadratic,
 barnett2023neural,ares2026nonlinear} use the SVD to determine $\PhiROM$, and  adopt $\Tm=[\,\ident_{\rD}\ \bm{0}\,]$,
 where \(\ident_{\rD}\) is the \(\rD\times\rD\) identity matrix; the
 latent coordinates are therefore the leading entries of \(\qrom\),
@@ -969,7 +969,7 @@ Section~\ref{sec:inputinformed}. Further details on the identification of $\Tm$ 
 % determination instead exploits the particular parametrization of the
 % problem, and the type of governing equation to be reduced.
 
-Regardless of the particular expression for $\Tm$,  assumption \refeq{eq:qMdefq} together with Eq.~\ref{eq:qrom_definition}, defines the following master-slave decomposition for the modal coefficients
+Regardless of the particular expression for $\Tm$, on the approximation manifold, the relation in Eq.~\refeq{eq:qMdefq} together with Eq.~\ref{eq:qrom_definition} defines the following master--slave representation:
 \begin{equation}
 \label{eq:decoder_master_slave}
     \dred =    \PhiM \Am \qM
